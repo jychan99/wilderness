@@ -59,7 +59,7 @@ export type Database = {
       }
       STUMAIN: {
         Row: {
-          USERCODE: string
+          USER_CODE: string
           NAME: string
           BAP_NAME: string
           GRADE: string
@@ -69,7 +69,7 @@ export type Database = {
           NOTE: string
         }
         Insert: {
-          USERCODE: string
+          USER_CODE: string
           NAME: string
           BAP_NAME: string
           GRADE: string
@@ -79,7 +79,7 @@ export type Database = {
           NOTE: string
         }
         Update: {
-          USERCODE?: string
+          USER_CODE?: string
           NAME?: string
           BAP_NAME?: string
           GRADE?: string
@@ -92,19 +92,22 @@ export type Database = {
       ATTENDANCE: {
         Row: {
           ID: string
-          USERCODE: string
+          USER_CODE: string
+          NAME: string
           DATE: string
           PRESENT_YN: boolean
         }
         Insert: {
           ID: string
-          USERCODE: string
+          USER_CODE: string
+          NAME: string
           DATE: string
           PRESENT_YN: boolean
         }
         Update: {
           ID?: string
-          USERCODE?: string
+          USER_CODE?: string
+          NAME?: string
           DATE?: string
           PRESENT_YN?: boolean
         }

@@ -10,17 +10,34 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const mapGradeValue = (grade: USERMAIN['GRADE']): string => {
+  const gradeValue = String(grade ?? '');
+  const gradeMap: Record<string, string> = {
+    '0': '유치부',
+    '1': '초등부',
+    '2': '중등부',
+    '3': '고등부',
+    '유치부': '유치부',
+    '초등부': '초등부',
+    '중등부': '중등부',
+    '고등부': '고등부',
+    '모든학년': '모든학년',
+  };
+  return gradeMap[gradeValue] ?? gradeValue;
+};
+
 const mapUserMainToUser = (userMain: USERMAIN): User => {
-  // POSITION에서 role 판단
-  const role = userMain.POSITION === '회장' || userMain.POSITION === '부회장' ? 'admin' : 'teacher';
-  
+  const positionValue = String(userMain.POSITION ?? '');
+  const isAdmin = positionValue === '0' || userMain.POSITION === '회장' || userMain.POSITION === '부회장';
+  const role = isAdmin ? 'admin' : 'teacher';
+
   return {
     usercode: userMain.USERCODE,
     id: userMain.ID,
     name: userMain.NAME,
     baptismalName: userMain.BAP_NAME,
-    position: userMain.POSITION,
-    grade: userMain.GRADE,
+    position: positionValue,
+    grade: isAdmin ? '모든학년' : mapGradeValue(userMain.GRADE),
     role,
   };
 };

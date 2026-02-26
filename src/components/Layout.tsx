@@ -60,7 +60,7 @@ const Layout = ({ children, currentTab, onTabChange }: LayoutProps) => {
               <Church className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-heading font-bold text-sidebar-foreground text-lg leading-tight">테스트ERP</h1>
+              <h1 className="font-heading font-bold text-sidebar-foreground text-lg leading-tight">만촌2동 성당</h1>
             </div>
           </div>
         </div>

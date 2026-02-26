@@ -6,7 +6,7 @@ export type Grade = '모든학년' | '유치부' | '초등부' | '중등부' | '
 
 //사용자(로그인)
 export interface User {
-  usercode: string;
+  USER_CODE: string;
   id: string;
   name: string;
   baptismalName: string;
@@ -17,7 +17,7 @@ export interface User {
 
 //사용자 메인
 export interface USERMAIN {
-  USERCODE: string;
+  USER_CODE: string;
   ID: string;
   NAME: string;
   BAP_NAME: string; // 세례명
@@ -28,7 +28,7 @@ export interface USERMAIN {
 
 //학생메인
 export interface STUMAIN {
-  USERCODE: string;
+  USER_CODE: string;
   NAME: string;
   BAP_NAME: string; // 세례명
   GRADE: string;
@@ -41,7 +41,8 @@ export interface STUMAIN {
 //출석
 export interface ATTENDANCE {
   ID: string;
-  USERCODE: string;
+  USER_CODE: string;
+  NAME: string
   DATE: string; // YYYY-MM-DD
   PRESENT_YN: boolean;
 }
