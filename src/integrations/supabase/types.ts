@@ -14,7 +14,153 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      SCHEDULE: {
+        Row: {
+          ID: string
+          TITLE: string
+          DATE: string
+          CONTENT: string
+        }
+        Insert: {
+          ID: string
+          TITLE: string
+          DATE: string
+          CONTENT: string
+        }
+        Update: {
+          ID?: string
+          TITLE?: string
+          DATE?: string
+          CONTENT?: string
+        }
+      }
+      MEETING: {
+        Row: {
+          ID: string
+          TITLE: string
+          CONTENT: string
+          AUTHOR: string
+          DATE: string
+        }
+        Insert: {
+          ID: string
+          TITLE: string
+          CONTENT: string
+          AUTHOR: string
+          DATE: string
+        }
+        Update: {
+          ID?: string
+          TITLE?: string
+          CONTENT?: string
+          AUTHOR?: string
+          DATE?: string
+        }
+      }
+      STUMAIN: {
+        Row: {
+          USERCODE: string
+          NAME: string
+          BAP_NAME: string
+          GRADE: string
+          NAME_DAY: string
+          CONTACT: string
+          FAMILY_CONTACT: string
+          NOTE: string
+        }
+        Insert: {
+          USERCODE: string
+          NAME: string
+          BAP_NAME: string
+          GRADE: string
+          NAME_DAY: string
+          CONTACT: string
+          FAMILY_CONTACT: string
+          NOTE: string
+        }
+        Update: {
+          USERCODE?: string
+          NAME?: string
+          BAP_NAME?: string
+          GRADE?: string
+          NAME_DAY?: string
+          CONTACT?: string
+          FAMILY_CONTACT?: string
+          NOTE?: string
+        }
+      }
+      ATTENDANCE: {
+        Row: {
+          ID: string
+          USERCODE: string
+          DATE: string
+          PRESENT_YN: boolean
+        }
+        Insert: {
+          ID: string
+          USERCODE: string
+          DATE: string
+          PRESENT_YN: boolean
+        }
+        Update: {
+          ID?: string
+          USERCODE?: string
+          DATE?: string
+          PRESENT_YN?: boolean
+        }
+      }
+      ACCOUNT: {
+        Row: {
+          ID: string
+          DATE: string
+          TYPE: 'income' | 'expense'
+          CATEGORY: string
+          CONTENT: string
+          AMOUNT: number
+          REGISTERED_BY: string
+        }
+        Insert: {
+          ID: string
+          DATE: string
+          TYPE: 'income' | 'expense'
+          CATEGORY: string
+          CONTENT: string
+          AMOUNT: number
+          REGISTERED_BY: string
+        }
+        Update: {
+          ID?: string
+          DATE?: string
+          TYPE?: 'income' | 'expense'
+          CATEGORY?: string
+          CONTENT?: string
+          AMOUNT?: number
+          REGISTERED_BY?: string
+        }
+      }
+      NOTIFICATION: {
+        Row: {
+          ID: string
+          TITLE: string
+          CONTENT: string
+          AUTHOR: string
+          CREATED_AT: string
+        }
+        Insert: {
+          ID: string
+          TITLE: string
+          CONTENT: string
+          AUTHOR: string
+          CREATED_AT: string
+        }
+        Update: {
+          ID?: string
+          TITLE?: string
+          CONTENT?: string
+          AUTHOR?: string
+          CREATED_AT?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
