@@ -1,6 +1,6 @@
 export type Role = 'teacher' | 'admin';
 
-export type Position = '회장' | '부회장' | '총무' | '서기' | '';
+export type Position = '관리자' | '회장' | '부회장' | '총무' | '서기' | '일반' | '';
 
 export type Grade = '모든학년' | '유치부' | '초등부' | '중등부' | '고등부';
 
@@ -22,8 +22,8 @@ export interface USERMAIN {
   NAME: string;
   BAP_NAME: string; // 세례명
   PASSWORD: string;
-  POSITION: string;
-  GRADE: string;
+  POSITION: number;
+  MANAGE_GRADE: number;
 }
 
 //학생메인

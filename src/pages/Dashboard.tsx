@@ -13,6 +13,7 @@ const Dashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: '', date: '', description: '' });
+  const [selectedEvent, setSelectedEvent] = useState<SCHEDULE | null>(null);
   const queryClient = useQueryClient();
 
   // 캘린더 이벤트 조회
@@ -83,6 +84,7 @@ const Dashboard = () => {
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const days: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) days.push(null);
@@ -189,36 +191,77 @@ const Dashboard = () => {
                 {day}
               </div>
             ))}
-            {days.map((day, i) => (
-              <div
-                key={i}
-                className={`bg-card min-h-[48px] sm:min-h-[80px] p-1 sm:p-1.5 ${day ? '' : 'bg-muted/50'}`}
-              >
-                {day && (
-                  <>
-                    <span className={`text-xs font-medium ${
-                      i % 7 === 0 ? 'text-destructive' : i % 7 === 6 ? 'text-primary' : 'text-foreground'
-                    }`}>
-                      {day}
-                    </span>
-                    <div className="mt-0.5 space-y-0.5">
-                      {getEventsForDay(day).map((event) => (
-                        <div
-                          key={event.ID}
-                          className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary truncate"
-                          title={event.TITLE}
-                        >
-                          {event.TITLE}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
+            {days.map((day, i) => {
+              const dateStr = day
+                ? `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                : '';
+              const isToday = day ? dateStr === todayStr : false;
+              return (
+                <div
+                  key={i}
+                  className={`min-h-[48px] sm:min-h-[80px] p-1 sm:p-1.5 ${
+                    day ? 'bg-card' : 'bg-muted/50'
+                  }`}
+                >
+                  {day && (
+                    <>
+                      <span
+                        className={`text-xs font-medium ${
+                          i % 7 === 0 ? 'text-destructive' : i % 7 === 6 ? 'text-primary' : 'text-foreground'
+                        } ${isToday ? 'bg-primary/15 text-primary rounded px-1.5 py-0.5' : ''}`}
+                      >
+                        {day}
+                      </span>
+                      <div className="mt-1 space-y-1 max-h-[40px] sm:max-h-[56px] overflow-y-auto pr-1 calendar-scrollbar">
+                        {getEventsForDay(day).map((event) => (
+                          <div
+                            key={event.ID}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary font-semibold truncate cursor-pointer hover:bg-primary/15"
+                            title={event.TITLE}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedEvent(event)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedEvent(event);
+                              }
+                            }}
+                          >
+                            {event.TITLE}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {/* Event Detail */}
+      <Dialog open={!!selectedEvent} onOpenChange={(open) => !open && setSelectedEvent(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading">details</DialogTitle>
+          </DialogHeader>
+          {selectedEvent && (
+            <div className="space-y-3">
+              <div>
+                <p className="font-medium">{selectedEvent.TITLE}</p>
+              </div>
+              <hr/>
+              <div>
+                <p className="text-sm text-foreground/80 whitespace-pre-wrap">
+                  {selectedEvent.CONTENT || '내용이 없습니다.'}
+                </p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Latest Meeting Note */}
       <div className="card-classic p-5">

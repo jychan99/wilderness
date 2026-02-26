@@ -61,23 +61,6 @@ const MeetingNotes = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   })();
 
-  // 날짜별 그룹화
-  const groupedNotes = useMemo(() => {
-    const groups: { [date: string]: MEETING[] } = {};
-    notes.forEach(note => {
-      if (!groups[note.DATE]) {
-        groups[note.DATE] = [];
-      }
-      groups[note.DATE].push(note);
-    });
-    return groups;
-  }, [notes]);
-
-  // 날짜 정렬 (최근이 위로)
-  const sortedDates = useMemo(() => {
-    return Object.keys(groupedNotes).sort((a, b) => b.localeCompare(a));
-  }, [groupedNotes]);
-
   const formatDateOnly = (dateStr: string) => {
     return dateStr.split('T')[0].split(' ')[0];
   };
@@ -88,6 +71,24 @@ const MeetingNotes = () => {
     const hhmm = timePart ? timePart.slice(0, 5) : '';
     return hhmm ? `${datePart} ${hhmm}` : datePart;
   };
+
+  // 날짜별 그룹화
+  const groupedNotes = useMemo(() => {
+    const groups: { [date: string]: MEETING[] } = {};
+    notes.forEach(note => {
+      const dateKey = formatDateOnly(note.DATE);
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(note);
+    });
+    return groups;
+  }, [notes]);
+
+  // 날짜 정렬 (최근이 위로)
+  const sortedDates = useMemo(() => {
+    return Object.keys(groupedNotes).sort((a, b) => b.localeCompare(a));
+  }, [groupedNotes]);
 
   const handleSubmit = () => {
     if (!form.TITLE || !form.CONTENT) return;

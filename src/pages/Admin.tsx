@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { User, Position, Grade } from '@/types';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { USERMAIN, Position, Grade } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,12 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Users, Trash2 } from 'lucide-react';
 
 const Admin = () => {
-  const [users, setUsers] = useState<User[]>(() => {
-    const stored = localStorage.getItem('erp-users');
-    if (stored) return JSON.parse(stored);
-    return [];
-  });
-
+  const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -24,50 +21,133 @@ const Admin = () => {
     grade: '' as Grade | '',
   });
 
-  const positions: Position[] = ['회장', '부회장', '총무', '서기'];
+  const positions: Position[] = ['회장', '부회장', '총무', '서기', '일반'];
   const grades: Grade[] = ['모든학년', '유치부', '초등부', '중등부', '고등부'];
+
+  // 직책을 숫자로 변환
+  const positionToNumber = (position: Position | ''): number => {
+    const positionMap: { [key: string]: number } = {
+      '관리자': 0,
+      '회장': 1,
+      '부회장': 2,
+      '총무': 3,
+      '서기': 4,
+      '일반': 5,
+    };
+    return positionMap[position] || 5;
+  };
+
+  // 숫자를 직책으로 변환
+  const numberToPosition = (num: number | string): string => {
+    const numberMap: { [key: number]: string } = {
+      0: '관리자',
+      1: '회장',
+      2: '부회장',
+      3: '총무',
+      4: '서기',
+      5: '일반',
+    };
+    const numValue = typeof num === 'string' ? parseInt(num) : num;
+    return numberMap[numValue] || '일반';
+  };
+
+  // 학년을 숫자로 변환
+  const gradeToNumber = (grade: Grade | ''): number => {
+    const gradeMap: { [key: string]: number } = {
+      '모든학년': 0,
+      '유치부': 1,
+      '초등부': 2,
+      '중등부': 3,
+      '고등부': 4,
+    };
+    return gradeMap[grade] || 0;
+  };
+
+  // 숫자를 학년으로 변환
+  const numberToGrade = (num: number | string): string => {
+    const numberMap: { [key: number]: string } = {
+      0: '모든학년',
+      1: '유치부',
+      2: '초등부',
+      3: '중등부',
+      4: '고등부',
+    };
+    const numValue = typeof num === 'string' ? parseInt(num) : num;
+    return numberMap[numValue] || '모든학년';
+  };
+
+  // 사용자 목록 조회
+  const { data: users = [] } = useQuery<USERMAIN[], Error>({
+    queryKey: ['usermain'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('USERMAIN').select('*');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 관리자만 필터링 (POSITION이 숫자 0)
+  const admins = users.filter(u => u.POSITION === 0);
+
+  // 사용자 추가 mutation
+  const addUserMutation = useMutation({
+    mutationFn: async (newUser: Omit<USERMAIN, 'USER_CODE'>) => {
+      console.log('Inserting user:', newUser);
+      const { data, error } = await (supabase as any).from('USERMAIN').insert([newUser]);
+      if (error) {
+        console.error('Insert error:', error);
+        throw error;
+      }
+      console.log('Insert success:', data);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['usermain'] });
+      setForm({ name: '', baptismalName: '', username: '', password: '', position: '' as Position, grade: '' });
+      setShowAdd(false);
+    },
+    onError: (error) => {
+      console.error('Mutation error:', error);
+      alert('사용자 추가 중 오류가 발생했습니다: ' + (error as any).message);
+    },
+  });
+
+  // 사용자 삭제 mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: async (USER_CODE: string) => {
+      const { error } = await supabase.from('USERMAIN').delete().eq('USER_CODE', USER_CODE);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['usermain'] });
+    },
+  });
 
   const handleAdd = () => {
     if (!form.name || !form.username || !form.password || !form.position || !form.grade) return;
 
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: form.name,
-      baptismalName: form.baptismalName,
-      username: form.username,
-      password: form.password,
-      role: 'teacher',
-      position: form.position,
-      grade: form.position === '회장' ? '모든학년' : form.grade as Grade,
+    const newUser: Omit<USERMAIN, 'USER_CODE'> = {
+      // USER_CODE 제거 - Supabase에서 자동 생성
+      ID: form.username,
+      NAME: form.name,
+      BAP_NAME: form.baptismalName,
+      PASSWORD: form.password,
+      POSITION: positionToNumber(form.position),
+      MANAGE_GRADE: form.position === '회장' ? gradeToNumber('모든학년') : gradeToNumber(form.grade as Grade),
     };
 
-    const updated = [...users, newUser];
-    setUsers(updated);
-
-    // Also update the full user list in localStorage
-    const allUsers = JSON.parse(localStorage.getItem('erp-users') || '[]');
-    allUsers.push(newUser);
-    localStorage.setItem('erp-users', JSON.stringify(allUsers));
-
-    setForm({ name: '', baptismalName: '', username: '', password: '', position: '' as Position, grade: '' });
-    setShowAdd(false);
+    addUserMutation.mutate(newUser as any);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (USER_CODE: string) => {
     if (!confirm('정말 삭제하시겠습니까?')) return;
-    const updated = users.filter(u => u.id !== id);
-    setUsers(updated);
-    const allUsers = JSON.parse(localStorage.getItem('erp-users') || '[]');
-    localStorage.setItem('erp-users', JSON.stringify(allUsers.filter((u: User) => u.id !== id)));
+    deleteUserMutation.mutate(USER_CODE);
   };
-
-  // Derive grade when position is 회장
-  const effectiveGrade = form.position === '회장' ? '모든학년' : form.grade;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">등록된 사용자: {users.length}명</p>
+        <p className="text-sm text-muted-foreground">등록된 사용자: {admins.length}명</p>
         <Dialog open={showAdd} onOpenChange={setShowAdd}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -130,23 +210,23 @@ const Admin = () => {
 
       {/* User list */}
       <div className="space-y-2">
-        {users.map(u => (
-          <div key={u.id} className="card-classic p-4 flex items-center justify-between">
+        {admins.map(u => (
+          <div key={u.USER_CODE} className="card-classic p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                 <Users className="w-4.5 h-4.5 text-primary" />
               </div>
               <div>
-                <p className="font-medium text-sm">{u.name} <span className="text-muted-foreground">({u.baptismalName})</span></p>
-                <p className="text-xs text-muted-foreground">{u.position} · {u.grade} · @{u.username}</p>
+                <p className="font-medium text-sm">{u.NAME} <span className="text-muted-foreground">({u.BAP_NAME})</span></p>
+                <p className="text-xs text-muted-foreground">{numberToPosition(u.POSITION)} · {numberToGrade(u.MANAGE_GRADE)} · @{u.ID}</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(u.id)}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(u.USER_CODE)}>
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
           </div>
         ))}
-        {users.length === 0 && (
+        {admins.length === 0 && (
           <div className="text-center py-12 text-muted-foreground text-sm">
             등록된 사용자가 없습니다.
           </div>

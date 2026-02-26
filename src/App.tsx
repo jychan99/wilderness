@@ -4,6 +4,7 @@ import Login from '@/pages/Login';
 import Layout from '@/components/Layout';
 import Dashboard from '@/pages/Dashboard';
 import StudentManagement from '@/pages/StudentManagement';
+import TeacherManagement from '@/pages/TeacherManagement';
 import MeetingNotes from '@/pages/MeetingNotes';
 import Accounting from '@/pages/Accounting';
 import Admin from '@/pages/Admin';
@@ -24,6 +25,7 @@ const AppContent = () => {
     switch (currentTab) {
       case 'dashboard': return <Dashboard />;
       case 'students': return <StudentManagement />;
+      case 'teachers': return <TeacherManagement />;
       case 'meetings': return <MeetingNotes />;
       case 'accounting': return <Accounting />;
       case 'admin': return <Admin />;

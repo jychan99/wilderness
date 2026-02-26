@@ -164,6 +164,35 @@ export type Database = {
           CREATED_AT?: string
         }
       }
+      USERMAIN: {
+        Row: {
+          USER_CODE: string
+          ID: string
+          NAME: string
+          BAP_NAME: string
+          PASSWORD: string
+          POSITION: string
+          MANAGE_GRADE: string
+        }
+        Insert: {
+          USER_CODE: string
+          ID: string
+          NAME: string
+          BAP_NAME: string
+          PASSWORD: string
+          POSITION: string
+          MANAGE_GRADE: string
+        }
+        Update: {
+          USER_CODE?: string
+          ID?: string
+          NAME?: string
+          BAP_NAME?: string
+          PASSWORD?: string
+          POSITION?: string
+          MANAGE_GRADE?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

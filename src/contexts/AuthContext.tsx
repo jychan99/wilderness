@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => boolean;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -32,7 +33,7 @@ const mapUserMainToUser = (userMain: USERMAIN): User => {
   const role = isAdmin ? 'admin' : 'teacher';
 
   return {
-    usercode: userMain.USERCODE,
+    USER_CODE: userMain.USER_CODE,
     id: userMain.ID,
     name: userMain.NAME,
     baptismalName: userMain.BAP_NAME,
@@ -71,8 +72,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   };
 
+  const updateUser = (updates: Partial<User>) => {
+    setUser(prev => (prev ? { ...prev, ...updates } : prev));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
