@@ -53,16 +53,17 @@ const Dashboard = () => {
     <div className="space-y-6">
       {/* Calendar */}
       <div className="card-classic p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-heading font-semibold text-lg">
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <h3 className="font-heading font-semibold text-base sm:text-lg">
             {year}년 {month + 1}월
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Dialog open={showAddEvent} onOpenChange={setShowAddEvent}>
               <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                  <Plus className="w-4 h-4" />
-                  일정 추가
+                <Button size="sm" className="gap-1 sm:gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">일정 추가</span>
+                  <span className="sm:hidden">추가</span>
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -109,14 +110,14 @@ const Dashboard = () => {
 
         <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
           {weekDays.map((day) => (
-            <div key={day} className="bg-muted p-2 text-center text-xs font-medium text-muted-foreground">
+            <div key={day} className="bg-muted p-1 sm:p-2 text-center text-[10px] sm:text-xs font-medium text-muted-foreground">
               {day}
             </div>
           ))}
           {days.map((day, i) => (
             <div
               key={i}
-              className={`bg-card min-h-[80px] p-1.5 ${day ? '' : 'bg-muted/50'}`}
+              className={`bg-card min-h-[48px] sm:min-h-[80px] p-1 sm:p-1.5 ${day ? '' : 'bg-muted/50'}`}
             >
               {day && (
                 <>

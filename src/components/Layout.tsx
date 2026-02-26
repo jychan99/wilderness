@@ -123,7 +123,7 @@ const Layout = ({ children, currentTab, onTabChange }: LayoutProps) => {
             {navItems.find(n => n.id === currentTab)?.label}
           </h2>
         </header>
-        <div className="p-4 lg:p-6 animate-fade-in">
+        <div className="p-3 sm:p-4 lg:p-6 animate-fade-in">
           {children}
         </div>
       </main>

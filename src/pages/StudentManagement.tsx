@@ -166,13 +166,13 @@ const StudentManagement = () => {
 
       {/* Attendance Check */}
       <div className="card-classic p-5">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <h3 className="font-heading font-semibold">출석 체크</h3>
           <Input
             type="date"
             value={attendanceDate}
             onChange={e => setAttendanceDate(e.target.value)}
-            className="w-44"
+            className="w-full sm:w-44"
           />
         </div>
 
