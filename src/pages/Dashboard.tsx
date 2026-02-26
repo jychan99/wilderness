@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CalendarEvent } from '@/types';
-import { mockEvents, mockMeetingNotes } from '@/data/mockData';
+import { SCHEDULE, MEETING } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -10,11 +11,50 @@ import { Textarea } from '@/components/ui/textarea';
 
 const Dashboard = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>(mockEvents);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: '', date: '', description: '' });
+  const queryClient = useQueryClient();
 
-  const latestMeeting = mockMeetingNotes[0];
+  // 캘린더 이벤트 조회
+  const { data: events = [] } = useQuery<SCHEDULE[], Error>({
+    queryKey: ['calendar_events'],
+    queryFn: async (): Promise<SCHEDULE[]> => {
+      const { data, error } = await supabase
+        .from('SCHEDULE')
+        .select('*');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 회의록 조회
+  const { data: meetingNotes = [] } = useQuery<MEETING[], Error>({
+    queryKey: ['meeting_notes'],
+    queryFn: async (): Promise<MEETING[]> => {
+      const { data, error } = await supabase
+        .from('MEETING')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 이벤트 추가 뮤테이션
+  const addEventMutation = useMutation<void, Error, SCHEDULE>({
+    mutationFn: async (event: SCHEDULE) => {
+      const { error } = await supabase.from('SCHEDULE').insert([event]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['calendar_events'] });
+      setNewEvent({ title: '', date: '', description: '' });
+      setShowAddEvent(false);
+    },
+  });
+
+  const latestMeeting = meetingNotes[0] || null;
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -28,20 +68,18 @@ const Dashboard = () => {
 
   const getEventsForDay = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return events.filter(e => e.date === dateStr);
+    return events.filter(e => e.DATE === dateStr);
   };
 
   const handleAddEvent = () => {
     if (!newEvent.title || !newEvent.date) return;
-    const event: CalendarEvent = {
-      id: Date.now().toString(),
-      title: newEvent.title,
-      date: newEvent.date,
-      description: newEvent.description,
+    const event: SCHEDULE = {
+      ID: Date.now().toString(),
+      TITLE: newEvent.title,
+      DATE: newEvent.date,
+      CONTENT: newEvent.description,
     };
-    setEvents([...events, event]);
-    setNewEvent({ title: '', date: '', description: '' });
-    setShowAddEvent(false);
+    addEventMutation.mutate(event);
   };
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
@@ -129,11 +167,11 @@ const Dashboard = () => {
                   <div className="mt-0.5 space-y-0.5">
                     {getEventsForDay(day).map((event) => (
                       <div
-                        key={event.id}
+                        key={event.ID}
                         className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary truncate"
-                        title={event.title}
+                        title={event.TITLE}
                       >
-                        {event.title}
+                        {event.TITLE}
                       </div>
                     ))}
                   </div>
@@ -150,12 +188,12 @@ const Dashboard = () => {
           <h3 className="font-heading font-semibold text-lg mb-3">최신 회의록</h3>
           <div className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium">{latestMeeting.title}</h4>
-              <span className="text-xs text-muted-foreground">{latestMeeting.date}</span>
+              <h4 className="font-medium">{latestMeeting.TITLE}</h4>
+              <span className="text-xs text-muted-foreground">{latestMeeting.DATE}</span>
             </div>
-            <p className="text-sm text-muted-foreground mb-2">작성자: {latestMeeting.author}</p>
+            <p className="text-sm text-muted-foreground mb-2">작성자: {latestMeeting.AUTHOR}</p>
             <pre className="text-sm whitespace-pre-wrap font-body text-foreground/80">
-              {latestMeeting.content}
+              {latestMeeting.CONTENT}
             </pre>
           </div>
         </div>

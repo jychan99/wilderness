@@ -11,10 +11,11 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!login(username, password)) {
+    const success = await login(username, password);
+    if (!success) {
       setError('아이디 또는 비밀번호가 올바르지 않습니다.');
     }
   };
@@ -27,8 +28,8 @@ const Login = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
               <Church className="w-8 h-8 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold font-heading text-foreground">테스트ERP</h1>
-            <p className="text-sm text-muted-foreground mt-1">성당 교육부 관리 시스템</p>
+            <h1 className="text-2xl font-bold font-heading text-foreground">만촌2동 성당</h1>
+            <p className="text-sm text-muted-foreground mt-1">교리교사 ERP 시스템</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -65,8 +66,7 @@ const Login = () => {
 
           <div className="mt-6 pt-4 border-t border-border">
             <p className="text-xs text-muted-foreground text-center">
-              테스트 계정: admin / admin123 (관리자)<br />
-              teacher1 / teacher123 (선생님)
+              최초계정은 관리자에게 문의바랍니다. &copy; jychan99
             </p>
           </div>
         </div>

@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { Student, AttendanceRecord, Grade } from '@/types';
-import { mockStudents, mockAttendance } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,14 +14,96 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const StudentManagement = () => {
   const { user } = useAuth();
-  const [students, setStudents] = useState<Student[]>(mockStudents);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>(mockAttendance);
+  const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [form, setForm] = useState({ name: '', grade: '' as Grade | '', phone: '', parentPhone: '', notes: '' });
+
+  // 학생 조회
+  const { data: students = [] } = useQuery({
+    queryKey: ['students'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('students').select('*');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 출석 조회
+  const { data: attendance = [] } = useQuery({
+    queryKey: ['attendance_records'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('attendance_records').select('*');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 학생 추가
+  const addStudentMutation = useMutation({
+    mutationFn: async (newStudent: Student) => {
+      const { error } = await supabase.from('students').insert([newStudent]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      setForm({ name: '', grade: '', phone: '', parentPhone: '', notes: '' });
+      setShowAdd(false);
+    },
+  });
+
+  // 학생 수정
+  const editStudentMutation = useMutation({
+    mutationFn: async (updatedStudent: Student) => {
+      const { error } = await supabase
+        .from('students')
+        .update(updatedStudent)
+        .eq('id', updatedStudent.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      setEditingStudent(null);
+    },
+  });
+
+  // 학생 삭제
+  const deleteStudentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('students').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+    },
+  });
+
+  // 출석 토글
+  const toggleAttendanceMutation = useMutation({
+    mutationFn: async (studentId: string) => {
+      const existing = attendance.find(a => a.student_id === studentId && a.date === attendanceDate);
+      if (existing) {
+        const { error } = await supabase
+          .from('attendance_records')
+          .update({ present: !existing.present })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('attendance_records').insert([{
+          student_id: studentId,
+          date: attendanceDate,
+          present: true,
+        }]);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance_records'] });
+    },
+  });
 
   const filteredStudents = useMemo(() => {
     if (!user) return [];
@@ -29,7 +112,7 @@ const StudentManagement = () => {
 
   const attendanceStats = useMemo(() => {
     return filteredStudents.map(student => {
-      const records = attendance.filter(a => a.studentId === student.id);
+      const records = attendance.filter(a => a.student_id === student.id);
       const total = records.length;
       const present = records.filter(a => a.present).length;
       return {
@@ -55,41 +138,26 @@ const StudentManagement = () => {
       parentPhone: form.parentPhone,
       notes: form.notes,
     };
-    setStudents([...students, newStudent]);
-    setForm({ name: '', grade: '', phone: '', parentPhone: '', notes: '' });
-    setShowAdd(false);
+    addStudentMutation.mutate(newStudent);
   };
 
   const handleEdit = () => {
     if (!editingStudent) return;
-    setStudents(students.map(s => s.id === editingStudent.id ? editingStudent : s));
-    setEditingStudent(null);
+    editStudentMutation.mutate(editingStudent);
   };
 
   const handleDelete = (id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
-      setStudents(students.filter(s => s.id !== id));
+      deleteStudentMutation.mutate(id);
     }
   };
 
   const toggleAttendance = (studentId: string) => {
-    const existing = attendance.find(a => a.studentId === studentId && a.date === attendanceDate);
-    if (existing) {
-      setAttendance(attendance.map(a =>
-        a.id === existing.id ? { ...a, present: !a.present } : a
-      ));
-    } else {
-      setAttendance([...attendance, {
-        id: Date.now().toString(),
-        studentId,
-        date: attendanceDate,
-        present: true,
-      }]);
-    }
+    toggleAttendanceMutation.mutate(studentId);
   };
 
   const isPresent = (studentId: string) => {
-    return attendance.find(a => a.studentId === studentId && a.date === attendanceDate)?.present || false;
+    return attendance.find(a => a.student_id === studentId && a.date === attendanceDate)?.present || false;
   };
 
   return (
@@ -167,7 +235,7 @@ const StudentManagement = () => {
           <h4 className="font-heading font-semibold text-sm mb-3">학생별 출석 기록</h4>
           <div className="space-y-2">
             {filteredStudents.map(student => {
-              const records = attendance.filter(a => a.studentId === student.id).sort((a, b) => a.date.localeCompare(b.date));
+              const records = attendance.filter(a => a.student_id === student.id).sort((a, b) => a.date.localeCompare(b.date));
               const isOpen = selectedStudent?.id === student.id;
               return (
                 <div key={student.id} className="border border-border rounded-lg overflow-hidden">

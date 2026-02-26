@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { MeetingNote } from '@/types';
-import { mockMeetingNotes } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,10 +12,36 @@ import { Plus, FileText, ArrowLeft } from 'lucide-react';
 
 const MeetingNotes = () => {
   const { user } = useAuth();
-  const [notes, setNotes] = useState<MeetingNote[]>(mockMeetingNotes);
+  const queryClient = useQueryClient();
   const [showWrite, setShowWrite] = useState(false);
   const [selectedNote, setSelectedNote] = useState<MeetingNote | null>(null);
   const [form, setForm] = useState({ title: '', content: '' });
+
+  // 회의록 조회
+  const { data: notes = [] } = useQuery({
+    queryKey: ['meeting_notes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meeting_notes')
+        .select('*')
+        .order('date', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 회의록 작성 뮤테이션
+  const submitNoteMutation = useMutation({
+    mutationFn: async (newNote: MeetingNote) => {
+      const { error } = await supabase.from('meeting_notes').insert([newNote]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting_notes'] });
+      setForm({ title: '', content: '' });
+      setShowWrite(false);
+    },
+  });
 
   if (!user) return null;
 
@@ -26,13 +53,11 @@ const MeetingNotes = () => {
       id: Date.now().toString(),
       title: form.title,
       content: form.content,
-      author: user.name,
+      author: user?.name || 'unknown',
       date: new Date().toISOString().split('T')[0],
       createdAt: new Date().toISOString(),
     };
-    setNotes([newNote, ...notes]);
-    setForm({ title: '', content: '' });
-    setShowWrite(false);
+    submitNoteMutation.mutate(newNote);
   };
 
   if (selectedNote) {

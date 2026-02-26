@@ -4,56 +4,81 @@ export type Position = '회장' | '부회장' | '총무' | '서기' | '';
 
 export type Grade = '모든학년' | '유치부' | '초등부' | '중등부' | '고등부';
 
+//사용자(로그인)
 export interface User {
+  usercode: string;
   id: string;
   name: string;
-  baptismalName: string; // 세례명
-  username: string;
-  password: string;
+  baptismalName: string;
+  position: string;
+  grade: string;
   role: Role;
-  position: Position;
-  grade: Grade;
 }
 
-export interface Student {
-  id: string;
-  name: string;
-  grade: Grade;
-  phone?: string;
-  parentPhone?: string;
-  notes?: string;
+//사용자 메인
+export interface USERMAIN {
+  USERCODE: string;
+  ID: string;
+  NAME: string;
+  BAP_NAME: string; // 세례명
+  PASSWORD: string;
+  POSITION: string;
+  GRADE: string;
 }
 
-export interface AttendanceRecord {
-  id: string;
-  studentId: string;
-  date: string; // YYYY-MM-DD
-  present: boolean;
+//학생메인
+export interface STUMAIN {
+  USERCODE: string;
+  NAME: string;
+  BAP_NAME: string; // 세례명
+  GRADE: string;
+  NAME_DAY: string; // 축일
+  CONTACT: string;
+  FAMILY_CONTACT: string;
+  NOTE: string;
 }
 
-export interface MeetingNote {
-  id: string;
-  title: string;
-  content: string;
-  author: string;
-  date: string;
-  createdAt: string;
+//출석
+export interface ATTENDANCE {
+  ID: string;
+  USERCODE: string;
+  DATE: string; // YYYY-MM-DD
+  PRESENT_YN: boolean;
 }
 
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  date: string;
-  description?: string;
-  color?: string;
+//회의록
+export interface MEETING {
+  ID: string;
+  TITLE: string;
+  CONTENT: string;
+  AUTHOR: string;
+  DATE: string;
 }
 
-export interface AccountingEntry {
-  id: string;
-  date: string;
-  type: 'income' | 'expense';
-  category: string;
-  description: string;
-  amount: number;
-  registeredBy: string;
+//일정
+export interface SCHEDULE {
+  ID: string;
+  TITLE: string;
+  DATE: string;
+  CONTENT: string;
+}
+
+//전산회계
+export interface ACCOUNT {
+  ID: string;
+  DATE: string;
+  TYPE: 'income' | 'expense';
+  CATEGORY: string;
+  CONTENT: string;
+  AMOUNT: number;
+  REGISTERED_BY: string;
+}
+
+//공지사항
+export interface NOTIFICATION {
+  ID: string;
+  TITLE: string;
+  CONTENT: string;
+  AUTHOR: string;
+  CREATED_AT: string;
 }

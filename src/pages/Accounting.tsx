@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { AccountingEntry } from '@/types';
-import { mockAccounting } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +13,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const Accounting = () => {
   const { user } = useAuth();
-  const [entries, setEntries] = useState<AccountingEntry[]>(mockAccounting);
+  const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [form, setForm] = useState({
@@ -23,19 +24,44 @@ const Accounting = () => {
     amount: '',
   });
 
+  // 회계 항목 조회
+  const { data: entries = [] } = useQuery({
+    queryKey: ['accounting_entries'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('accounting_entries')
+        .select('*');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 거래 추가 뮤테이션
+  const addEntryMutation = useMutation({
+    mutationFn: async (entry: AccountingEntry) => {
+      const { error } = await supabase.from('accounting_entries').insert([entry]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounting_entries'] });
+      setForm({ date: new Date().toISOString().split('T')[0], type: 'income', category: '', description: '', amount: '' });
+      setShowAdd(false);
+    },
+  });
+
   const summary = useMemo(() => {
-    const income = entries.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
-    const expense = entries.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
+    const income = entries.filter(e => e.TYPE === 'income').reduce((sum, e) => sum + e.AMOUNT, 0);
+    const expense = entries.filter(e => e.TYPE === 'expense').reduce((sum, e) => sum + e.AMOUNT, 0);
     return { income, expense, balance: income - expense };
   }, [entries]);
 
   const chartData = useMemo(() => {
     const monthMap = new Map<string, { month: string; 수입: number; 지출: number }>();
     entries.forEach(e => {
-      const month = e.date.slice(0, 7); // YYYY-MM
+      const month = e.DATE.slice(0, 7); // YYYY-MM
       const existing = monthMap.get(month) || { month, 수입: 0, 지출: 0 };
-      if (e.type === 'income') existing.수입 += e.amount;
-      else existing.지출 += e.amount;
+      if (e.TYPE === 'income') existing.수입 += e.AMOUNT;
+      else existing.지출 += e.AMOUNT;
       monthMap.set(month, existing);
     });
     return Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
@@ -45,14 +71,14 @@ const Accounting = () => {
 
   const handleAdd = () => {
     if (!form.category || !form.description || !form.amount) return;
-    const entry: AccountingEntry = {
-      id: Date.now().toString(),
-      date: form.date,
-      type: form.type,
-      category: form.category,
-      description: form.description,
-      amount: parseInt(form.amount),
-      registeredBy: user.name,
+    const entry: ACCOUNT = {
+      ID: Date.now().toString(),
+      DATE: form.date,
+      TYPE: form.type,
+      CATEGORY: form.category,
+      CONTENT: form.description,
+      AMOUNT: parseInt(form.amount),
+      REGISTERED_BY: user.name,
     };
     setEntries([entry, ...entries]);
     setForm({ date: new Date().toISOString().split('T')[0], type: 'income', category: '', description: '', amount: '' });
@@ -176,26 +202,26 @@ const Accounting = () => {
               </tr>
             </thead>
             <tbody>
-              {entries.sort((a, b) => b.date.localeCompare(a.date)).map(entry => (
-                <tr key={entry.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-2.5 px-3">{entry.date}</td>
+              {entries.sort((a, b) => b.DATE.localeCompare(a.DATE)).map(entry => (
+                <tr key={entry.ID} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-2.5 px-3">{entry.DATE}</td>
                   <td className="py-2.5 px-3">
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                      entry.type === 'income'
+                      entry.TYPE === 'income'
                         ? 'bg-success/10 text-success'
                         : 'bg-destructive/10 text-destructive'
                     }`}>
-                      {entry.type === 'income' ? '수입' : '지출'}
+                      {entry.TYPE === 'income' ? '수입' : '지출'}
                     </span>
                   </td>
-                  <td className="py-2.5 px-3">{entry.category}</td>
-                  <td className="py-2.5 px-3">{entry.description}</td>
+                  <td className="py-2.5 px-3">{entry.CATEGORY}</td>
+                  <td className="py-2.5 px-3">{entry.CONTENT}</td>
                   <td className={`py-2.5 px-3 text-right font-medium ${
-                    entry.type === 'income' ? 'text-success' : 'text-destructive'
+                    entry.TYPE === 'income' ? 'text-success' : 'text-destructive'
                   }`}>
-                    {entry.type === 'income' ? '+' : '-'}{formatAmount(entry.amount)}
+                    {entry.TYPE === 'income' ? '+' : '-'}{formatAmount(entry.AMOUNT)}
                   </td>
-                  <td className="py-2.5 px-3 text-muted-foreground">{entry.registeredBy}</td>
+                  <td className="py-2.5 px-3 text-muted-foreground">{entry.REGISTERED_BY}</td>
                 </tr>
               ))}
             </tbody>
@@ -204,25 +230,25 @@ const Accounting = () => {
 
         {/* Mobile card list */}
         <div className="sm:hidden space-y-2">
-          {entries.sort((a, b) => b.date.localeCompare(a.date)).map(entry => (
-            <div key={entry.id} className="p-3 rounded-lg border border-border">
+          {entries.sort((a, b) => b.DATE.localeCompare(a.DATE)).map(entry => (
+            <div key={entry.ID} className="p-3 rounded-lg border border-border">
               <div className="flex items-center justify-between mb-1.5">
                 <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                  entry.type === 'income'
+                  entry.TYPE === 'income'
                     ? 'bg-success/10 text-success'
                     : 'bg-destructive/10 text-destructive'
                 }`}>
-                  {entry.type === 'income' ? '수입' : '지출'}
+                  {entry.TYPE === 'income' ? '수입' : '지출'}
                 </span>
-                <span className="text-xs text-muted-foreground">{entry.date}</span>
+                <span className="text-xs text-muted-foreground">{entry.DATE}</span>
               </div>
-              <p className="text-sm font-medium">{entry.description}</p>
+              <p className="text-sm font-medium">{entry.CONTENT}</p>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-muted-foreground">{entry.category} · {entry.registeredBy}</span>
+                <span className="text-xs text-muted-foreground">{entry.CATEGORY} · {entry.REGISTERED_BY}</span>
                 <span className={`text-sm font-bold ${
-                  entry.type === 'income' ? 'text-success' : 'text-destructive'
+                  entry.TYPE === 'income' ? 'text-success' : 'text-destructive'
                 }`}>
-                  {entry.type === 'income' ? '+' : '-'}{formatAmount(entry.amount)}
+                  {entry.TYPE === 'income' ? '+' : '-'}{formatAmount(entry.AMOUNT)}
                 </span>
               </div>
             </div>
