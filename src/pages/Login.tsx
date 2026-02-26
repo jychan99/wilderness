@@ -21,8 +21,8 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-md animate-fade-in">
-        <div className="card-classic p-8">
+      <div className="w-full max-w-md px-4 sm:px-0 animate-fade-in">
+        <div className="card-classic p-6 sm:p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
               <Church className="w-8 h-8 text-primary" />

@@ -122,7 +122,8 @@ const Accounting = () => {
           </Dialog>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
@@ -159,6 +160,33 @@ const Accounting = () => {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card list */}
+        <div className="sm:hidden space-y-2">
+          {entries.sort((a, b) => b.date.localeCompare(a.date)).map(entry => (
+            <div key={entry.id} className="p-3 rounded-lg border border-border">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                  entry.type === 'income'
+                    ? 'bg-success/10 text-success'
+                    : 'bg-destructive/10 text-destructive'
+                }`}>
+                  {entry.type === 'income' ? '수입' : '지출'}
+                </span>
+                <span className="text-xs text-muted-foreground">{entry.date}</span>
+              </div>
+              <p className="text-sm font-medium">{entry.description}</p>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-muted-foreground">{entry.category} · {entry.registeredBy}</span>
+                <span className={`text-sm font-bold ${
+                  entry.type === 'income' ? 'text-success' : 'text-destructive'
+                }`}>
+                  {entry.type === 'income' ? '+' : '-'}{formatAmount(entry.amount)}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
