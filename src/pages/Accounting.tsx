@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, Wallet, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const Accounting = () => {
   const { user } = useAuth();
   const [entries, setEntries] = useState<AccountingEntry[]>(mockAccounting);
   const [showAdd, setShowAdd] = useState(false);
+  const [showChart, setShowChart] = useState(false);
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
     type: 'income' as 'income' | 'expense',
@@ -25,6 +27,18 @@ const Accounting = () => {
     const income = entries.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
     const expense = entries.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
     return { income, expense, balance: income - expense };
+  }, [entries]);
+
+  const chartData = useMemo(() => {
+    const monthMap = new Map<string, { month: string; 수입: number; 지출: number }>();
+    entries.forEach(e => {
+      const month = e.date.slice(0, 7); // YYYY-MM
+      const existing = monthMap.get(month) || { month, 수입: 0, 지출: 0 };
+      if (e.type === 'income') existing.수입 += e.amount;
+      else existing.지출 += e.amount;
+      monthMap.set(month, existing);
+    });
+    return Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
   }, [entries]);
 
   if (!user) return null;
@@ -72,6 +86,32 @@ const Accounting = () => {
           </div>
           <p className="text-xl font-bold text-primary">{formatAmount(summary.balance)}</p>
         </div>
+      </div>
+
+      {/* Chart Toggle */}
+      <div className="card-classic p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-heading font-semibold">수입/지출 통계</h3>
+          <Button variant="outline" size="sm" onClick={() => setShowChart(!showChart)}>
+            <BarChart3 className="w-4 h-4 mr-1.5" />
+            {showChart ? '닫기' : '그래프 보기'}
+          </Button>
+        </div>
+        {showChart && (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210, 25%, 88%)" />
+                <XAxis dataKey="month" fontSize={12} />
+                <YAxis fontSize={12} tickFormatter={v => `${(v / 10000).toFixed(0)}만`} />
+                <Tooltip formatter={(value: number) => value.toLocaleString('ko-KR') + '원'} />
+                <Legend />
+                <Bar dataKey="수입" fill="hsl(210, 55%, 38%)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="지출" fill="hsl(0, 65%, 52%)" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* Add + Table */}

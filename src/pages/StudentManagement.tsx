@@ -17,6 +17,7 @@ const StudentManagement = () => {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(mockAttendance);
   const [showAdd, setShowAdd] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [form, setForm] = useState({ name: '', grade: '' as Grade | '', phone: '', parentPhone: '', notes: '' });
@@ -149,7 +150,7 @@ const StudentManagement = () => {
       {showStats && (
         <div className="card-classic p-5">
           <h3 className="font-heading font-semibold mb-4">출석 통계</h3>
-          <div className="h-64">
+          <div className="h-64 mb-6">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={attendanceStats}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(210, 25%, 88%)" />
@@ -160,6 +161,57 @@ const StudentManagement = () => {
                 <Bar dataKey="결석" fill="hsl(0, 65%, 52%)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Per-student attendance detail */}
+          <h4 className="font-heading font-semibold text-sm mb-3">학생별 출석 기록</h4>
+          <div className="space-y-2">
+            {filteredStudents.map(student => {
+              const records = attendance.filter(a => a.studentId === student.id).sort((a, b) => a.date.localeCompare(b.date));
+              const isOpen = selectedStudent?.id === student.id;
+              return (
+                <div key={student.id} className="border border-border rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setSelectedStudent(isOpen ? null : student)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <div>
+                      <span className="font-medium text-sm">{student.name}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{student.grade}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        출석 {records.filter(r => r.present).length}/{records.length}
+                      </span>
+                      <span className={`text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="border-t border-border p-3 bg-muted/20">
+                      {records.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">출석 기록이 없습니다.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {records.map(record => (
+                            <div
+                              key={record.id}
+                              className={`flex items-center gap-2 px-2.5 py-1.5 rounded text-xs font-medium ${
+                                record.present
+                                  ? 'bg-success/10 text-success'
+                                  : 'bg-destructive/10 text-destructive'
+                              }`}
+                            >
+                              <span>{record.date}</span>
+                              <span>{record.present ? '출석' : '결석'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
