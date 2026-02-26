@@ -29,12 +29,13 @@ const Dashboard = () => {
 
   // 회의록 조회
   const { data: meetingNotes = [], isLoading: meetingLoading } = useQuery<MEETING[], Error>({
-    queryKey: ['meeting_notes'],
+    queryKey: ['meetings'],
     queryFn: async (): Promise<MEETING[]> => {
       const { data, error } = await supabase
         .from('MEETING')
         .select('*')
         .order('DATE', { ascending: false })
+        .order('ID', { ascending: false })
         .limit(1);
       if (error) throw error;
       return data || [];
@@ -230,7 +231,7 @@ const Dashboard = () => {
           <div className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-medium">{latestMeeting.TITLE}</h4>
-              <span className="text-xs text-muted-foreground">{latestMeeting.DATE}</span>
+              <span className="text-xs text-muted-foreground">{latestMeeting.DATE.split('T')[0]}</span>
             </div>
             <p className="text-sm text-muted-foreground mb-2">작성자: {latestMeeting.AUTHOR}</p>
             <pre className="text-sm whitespace-pre-wrap font-body text-foreground/80">
