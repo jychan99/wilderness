@@ -1,8 +1,15 @@
-export type Role = 'teacher' | 'admin';
+export type Role = "teacher" | "admin";
 
-export type Position = '관리자' | '회장' | '부회장' | '총무' | '서기' | '일반' | '';
+export type Position =
+  | "관리자"
+  | "회장"
+  | "부회장"
+  | "총무"
+  | "서기"
+  | "일반"
+  | "";
 
-export type Grade = '모든학년' | '유치부' | '초등부' | '중등부' | '고등부';
+export type Grade = "모든학년" | "유치부" | "초등부" | "중등부" | "고등부";
 
 //사용자(로그인)
 export interface User {
@@ -42,7 +49,7 @@ export interface STUMAIN {
 export interface ATTENDANCE {
   ID: string;
   USER_CODE: string;
-  NAME: string
+  NAME: string;
   DATE: string; // YYYY-MM-DD
   PRESENT_YN: boolean;
 }
@@ -68,7 +75,7 @@ export interface SCHEDULE {
 export interface ACCOUNT {
   ID: string;
   DATE: string;
-  TYPE: 'income' | 'expense';
+  TYPE: "income" | "expense";
   CATEGORY: string;
   CONTENT: string;
   AMOUNT: number;
@@ -81,5 +88,6 @@ export interface NOTIFICATION {
   TITLE: string;
   CONTENT: string;
   AUTHOR: string;
+  POSITION: string;
   CREATED_AT: string;
 }

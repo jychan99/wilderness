@@ -1,36 +1,69 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@/contexts/AuthContext';
-import { AccountingEntry } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, TrendingUp, TrendingDown, Wallet, BarChart3 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { ACCOUNT } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  BarChart3,
+} from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 
 const Accounting = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
   const [showChart, setShowChart] = useState(false);
+  const [dateRange, setDateRange] = useState({
+    start: "",
+    end: "",
+  });
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    type: 'income' as 'income' | 'expense',
-    category: '',
-    description: '',
-    amount: '',
+    date: new Date().toISOString().split("T")[0],
+    type: "income" as "income" | "expense",
+    category: "",
+    description: "",
+    amount: "",
   });
 
   // 회계 항목 조회
-  const { data: entries = [] } = useQuery({
-    queryKey: ['accounting_entries'],
+  const { data: entries = [] } = useQuery<ACCOUNT[], Error>({
+    queryKey: ["accounting_entries"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('accounting_entries')
-        .select('*');
+        .from("ACCOUNT")
+        .select("*")
+        .order("DATE", { ascending: false });
       if (error) throw error;
       return data || [];
     },
@@ -38,54 +71,194 @@ const Accounting = () => {
 
   // 거래 추가 뮤테이션
   const addEntryMutation = useMutation({
-    mutationFn: async (entry: AccountingEntry) => {
-      const { error } = await supabase.from('accounting_entries').insert([entry]);
-      if (error) throw error;
+    mutationFn: async (entry: ACCOUNT) => {
+      const { data, error } = await (supabase as any)
+        .from("ACCOUNT")
+        .insert([entry])
+        .select();
+
+      if (error) {
+        console.error("거래 추가 에러:", error);
+        console.error("에러 상세:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+        });
+        throw error;
+      }
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounting_entries'] });
-      setForm({ date: new Date().toISOString().split('T')[0], type: 'income', category: '', description: '', amount: '' });
+      queryClient.invalidateQueries({ queryKey: ["accounting_entries"] });
+      setForm({
+        date: new Date().toISOString().split("T")[0],
+        type: "income",
+        category: "",
+        description: "",
+        amount: "",
+      });
       setShowAdd(false);
+      toast({
+        title: "거래 추가 완료",
+        description: "거래 내역이 성공적으로 추가되었습니다.",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Mutation 실패:", error);
+
+      let errorMessage = "거래 내역 추가 중 오류가 발생했습니다.";
+
+      if (error.code === "42501" || error.message?.includes("policy")) {
+        errorMessage = "데이터베이스 권한이 없습니다. RLS 정책을 확인해주세요.";
+      } else if (error.code === "PGRST301") {
+        errorMessage = "인증이 필요합니다. 다시 로그인해주세요.";
+      }
+
+      toast({
+        title: "거래 추가 실패",
+        description: errorMessage,
+        variant: "destructive",
+      });
     },
   });
 
   const summary = useMemo(() => {
-    const income = entries.filter(e => e.TYPE === 'income').reduce((sum, e) => sum + e.AMOUNT, 0);
-    const expense = entries.filter(e => e.TYPE === 'expense').reduce((sum, e) => sum + e.AMOUNT, 0);
+    const income = entries
+      .filter((e) => e.TYPE === "income")
+      .reduce((sum, e) => sum + e.AMOUNT, 0);
+    const expense = entries
+      .filter((e) => e.TYPE === "expense")
+      .reduce((sum, e) => sum + e.AMOUNT, 0);
     return { income, expense, balance: income - expense };
   }, [entries]);
 
-  const chartData = useMemo(() => {
-    const monthMap = new Map<string, { month: string; 수입: number; 지출: number }>();
-    entries.forEach(e => {
-      const month = e.DATE.slice(0, 7); // YYYY-MM
-      const existing = monthMap.get(month) || { month, 수입: 0, 지출: 0 };
-      if (e.TYPE === 'income') existing.수입 += e.AMOUNT;
-      else existing.지출 += e.AMOUNT;
-      monthMap.set(month, existing);
+  // 날짜 필터링된 항목
+  const filteredEntries = useMemo(() => {
+    if (!dateRange.start && !dateRange.end) return entries;
+
+    return entries.filter((entry) => {
+      const entryDate = entry.DATE;
+      if (dateRange.start && entryDate < dateRange.start) return false;
+      if (dateRange.end && entryDate > dateRange.end) return false;
+      return true;
     });
-    return Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
-  }, [entries]);
+  }, [entries, dateRange]);
+
+  // 수입 분류별 데이터 (원그래프용)
+  const incomeChartData = useMemo(() => {
+    const categoryMap = new Map<
+      string,
+      { category: string; amount: number; entries: ACCOUNT[] }
+    >();
+
+    filteredEntries
+      .filter((e) => e.TYPE === "income")
+      .forEach((e) => {
+        const existing = categoryMap.get(e.CATEGORY) || {
+          category: e.CATEGORY,
+          amount: 0,
+          entries: [],
+        };
+        existing.amount += e.AMOUNT;
+        existing.entries.push(e);
+        categoryMap.set(e.CATEGORY, existing);
+      });
+
+    return Array.from(categoryMap.values()).map((item) => ({
+      name: item.category,
+      value: item.amount,
+      entries: item.entries,
+    }));
+  }, [filteredEntries]);
+
+  // 지출 분류별 데이터 (원그래프용)
+  const expenseChartData = useMemo(() => {
+    const categoryMap = new Map<
+      string,
+      { category: string; amount: number; entries: ACCOUNT[] }
+    >();
+
+    filteredEntries
+      .filter((e) => e.TYPE === "expense")
+      .forEach((e) => {
+        const existing = categoryMap.get(e.CATEGORY) || {
+          category: e.CATEGORY,
+          amount: 0,
+          entries: [],
+        };
+        existing.amount += e.AMOUNT;
+        existing.entries.push(e);
+        categoryMap.set(e.CATEGORY, existing);
+      });
+
+    return Array.from(categoryMap.values()).map((item) => ({
+      name: item.category,
+      value: item.amount,
+      entries: item.entries,
+    }));
+  }, [filteredEntries]);
+
+  // 차트 색상
+  const COLORS = [
+    "#3b82f6",
+    "#10b981",
+    "#f59e0b",
+    "#ef4444",
+    "#8b5cf6",
+    "#ec4899",
+    "#14b8a6",
+    "#f97316",
+    "#06b6d4",
+    "#84cc16",
+  ];
 
   if (!user) return null;
 
   const handleAdd = () => {
-    if (!form.category || !form.description || !form.amount) return;
+    // 입력 검증
+    if (!form.date) {
+      toast({
+        title: "날짜를 입력해주세요",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!form.category.trim()) {
+      toast({
+        title: "분류를 입력해주세요",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!form.description.trim()) {
+      toast({
+        title: "내용을 입력해주세요",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!form.amount || parseInt(form.amount, 10) <= 0) {
+      toast({
+        title: "올바른 금액을 입력해주세요",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const entry: ACCOUNT = {
       ID: Date.now().toString(),
       DATE: form.date,
       TYPE: form.type,
-      CATEGORY: form.category,
-      CONTENT: form.description,
-      AMOUNT: parseInt(form.amount),
-      REGISTERED_BY: user.name,
+      CATEGORY: form.category.trim(),
+      CONTENT: form.description.trim(),
+      AMOUNT: parseInt(form.amount, 10),
+      REGISTERED_BY: user?.name || "관리자",
     };
-    setEntries([entry, ...entries]);
-    setForm({ date: new Date().toISOString().split('T')[0], type: 'income', category: '', description: '', amount: '' });
-    setShowAdd(false);
+    addEntryMutation.mutate(entry);
   };
 
-  const formatAmount = (amount: number) => amount.toLocaleString('ko-KR') + '원';
+  const formatAmount = (amount: number) =>
+    amount.toLocaleString("ko-KR") + "원";
 
   return (
     <div className="space-y-6">
@@ -96,21 +269,27 @@ const Accounting = () => {
             <TrendingUp className="w-4 h-4 text-success" />
             <span className="text-sm text-muted-foreground">총 수입</span>
           </div>
-          <p className="text-xl font-bold text-success">{formatAmount(summary.income)}</p>
+          <p className="text-xl font-bold text-success">
+            {formatAmount(summary.income)}
+          </p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-2">
             <TrendingDown className="w-4 h-4 text-destructive" />
             <span className="text-sm text-muted-foreground">총 지출</span>
           </div>
-          <p className="text-xl font-bold text-destructive">{formatAmount(summary.expense)}</p>
+          <p className="text-xl font-bold text-destructive">
+            {formatAmount(summary.expense)}
+          </p>
         </div>
         <div className="stat-card">
           <div className="flex items-center gap-2 mb-2">
             <Wallet className="w-4 h-4 text-primary" />
             <span className="text-sm text-muted-foreground">잔액</span>
           </div>
-          <p className="text-xl font-bold text-primary">{formatAmount(summary.balance)}</p>
+          <p className="text-xl font-bold text-primary">
+            {formatAmount(summary.balance)}
+          </p>
         </div>
       </div>
 
@@ -118,24 +297,182 @@ const Accounting = () => {
       <div className="card-classic p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-heading font-semibold">수입/지출 통계</h3>
-          <Button variant="outline" size="sm" onClick={() => setShowChart(!showChart)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowChart(!showChart)}
+          >
             <BarChart3 className="w-4 h-4 mr-1.5" />
-            {showChart ? '닫기' : '그래프 보기'}
+            {showChart ? "닫기" : "통계 보기"}
           </Button>
         </div>
         {showChart && (
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(210, 25%, 88%)" />
-                <XAxis dataKey="month" fontSize={12} />
-                <YAxis fontSize={12} tickFormatter={v => `${(v / 10000).toFixed(0)}만`} />
-                <Tooltip formatter={(value: number) => value.toLocaleString('ko-KR') + '원'} />
-                <Legend />
-                <Bar dataKey="수입" fill="hsl(210, 55%, 38%)" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="지출" fill="hsl(0, 65%, 52%)" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="space-y-4">
+            {/* 날짜 필터 */}
+            <div className="flex gap-3 items-end">
+              <div className="flex-1 space-y-1.5">
+                <Label>시작 날짜</Label>
+                <Input
+                  type="date"
+                  value={dateRange.start}
+                  onChange={(e) =>
+                    setDateRange({ ...dateRange, start: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <Label>종료 날짜</Label>
+                <Input
+                  type="date"
+                  value={dateRange.end}
+                  onChange={(e) =>
+                    setDateRange({ ...dateRange, end: e.target.value })
+                  }
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setDateRange({ start: "", end: "" })}
+              >
+                초기화
+              </Button>
+            </div>
+
+            {/* 탭으로 나뉜 통계 */}
+            <Tabs defaultValue="income" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="income">총 수입 통계</TabsTrigger>
+                <TabsTrigger value="expense">총 지출 통계</TabsTrigger>
+              </TabsList>
+
+              {/* 수입 통계 */}
+              <TabsContent value="income" className="mt-4">
+                {incomeChartData.length > 0 ? (
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={incomeChartData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) =>
+                            `${name} ${(percent * 100).toFixed(0)}%`
+                          }
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {incomeChartData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white p-3 border rounded-lg shadow-lg">
+                                  <p className="font-semibold text-sm mb-2">
+                                    {data.name}
+                                  </p>
+                                  <p className="text-sm text-success font-bold mb-2">
+                                    {formatAmount(data.value)}
+                                  </p>
+                                  <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                                    {data.entries.map(
+                                      (entry: ACCOUNT, idx: number) => (
+                                        <div key={idx}>
+                                          • {entry.CONTENT} (
+                                          {formatAmount(entry.AMOUNT)})
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-80 flex items-center justify-center text-muted-foreground">
+                    해당 기간에 수입 내역이 없습니다.
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* 지출 통계 */}
+              <TabsContent value="expense" className="mt-4">
+                {expenseChartData.length > 0 ? (
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={expenseChartData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) =>
+                            `${name} ${(percent * 100).toFixed(0)}%`
+                          }
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {expenseChartData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white p-3 border rounded-lg shadow-lg">
+                                  <p className="font-semibold text-sm mb-2">
+                                    {data.name}
+                                  </p>
+                                  <p className="text-sm text-destructive font-bold mb-2">
+                                    {formatAmount(data.value)}
+                                  </p>
+                                  <div className="text-xs text-muted-foreground space-y-1 max-h-32 overflow-y-auto">
+                                    {data.entries.map(
+                                      (entry: ACCOUNT, idx: number) => (
+                                        <div key={idx}>
+                                          • {entry.CONTENT} (
+                                          {formatAmount(entry.AMOUNT)})
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-80 flex items-center justify-center text-muted-foreground">
+                    해당 기간에 지출 내역이 없습니다.
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         )}
       </div>
@@ -143,27 +480,38 @@ const Accounting = () => {
       {/* Add + Table */}
       <div className="card-classic p-5">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-heading font-semibold">거래 내역</h3>
+          <h3 className="font-heading font-semibold">🧾 회계 장부</h3>
           <Dialog open={showAdd} onOpenChange={setShowAdd}>
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="w-4 h-4 mr-1.5" />
-                거래 추가
+                내역 추가
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle className="font-heading">거래 추가</DialogTitle>
+                <DialogTitle className="font-heading">내역 추가</DialogTitle>
               </DialogHeader>
               <div className="space-y-3 pt-2">
                 <div className="space-y-1.5">
                   <Label>날짜</Label>
-                  <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+                  <Input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>구분</Label>
-                  <Select value={form.type} onValueChange={v => setForm({ ...form, type: v as 'income' | 'expense' })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={form.type}
+                    onValueChange={(v) =>
+                      setForm({ ...form, type: v as "income" | "expense" })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="income">수입</SelectItem>
                       <SelectItem value="expense">지출</SelectItem>
@@ -172,17 +520,42 @@ const Accounting = () => {
                 </div>
                 <div className="space-y-1.5">
                   <Label>분류</Label>
-                  <Input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="예: 헌금, 교재비" />
+                  <Input
+                    value={form.category}
+                    onChange={(e) =>
+                      setForm({ ...form, category: e.target.value })
+                    }
+                    placeholder="예: 헌금, 교재비"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>내용</Label>
-                  <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="거래 내용" />
+                  <Input
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({ ...form, description: e.target.value })
+                    }
+                    placeholder="거래 내용"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>금액</Label>
-                  <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="금액 (원)" />
+                  <Input
+                    type="number"
+                    value={form.amount}
+                    onChange={(e) =>
+                      setForm({ ...form, amount: e.target.value })
+                    }
+                    placeholder="금액 (원)"
+                  />
                 </div>
-                <Button onClick={handleAdd} className="w-full">추가</Button>
+                <Button
+                  onClick={handleAdd}
+                  className="w-full"
+                  disabled={addEntryMutation.isPending}
+                >
+                  {addEntryMutation.isPending ? "추가 중..." : "추가"}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -193,66 +566,108 @@ const Accounting = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">날짜</th>
-                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">구분</th>
-                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">분류</th>
-                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">내용</th>
-                <th className="text-right py-2.5 px-3 text-muted-foreground font-medium">금액</th>
-                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">등록자</th>
+                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">
+                  날짜
+                </th>
+                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">
+                  구분
+                </th>
+                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">
+                  분류
+                </th>
+                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">
+                  내용
+                </th>
+                <th className="text-right py-2.5 px-3 text-muted-foreground font-medium">
+                  금액
+                </th>
+                <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">
+                  등록자
+                </th>
               </tr>
             </thead>
             <tbody>
-              {entries.sort((a, b) => b.DATE.localeCompare(a.DATE)).map(entry => (
-                <tr key={entry.ID} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-2.5 px-3">{entry.DATE}</td>
-                  <td className="py-2.5 px-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                      entry.TYPE === 'income'
-                        ? 'bg-success/10 text-success'
-                        : 'bg-destructive/10 text-destructive'
-                    }`}>
-                      {entry.TYPE === 'income' ? '수입' : '지출'}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3">{entry.CATEGORY}</td>
-                  <td className="py-2.5 px-3">{entry.CONTENT}</td>
-                  <td className={`py-2.5 px-3 text-right font-medium ${
-                    entry.TYPE === 'income' ? 'text-success' : 'text-destructive'
-                  }`}>
-                    {entry.TYPE === 'income' ? '+' : '-'}{formatAmount(entry.AMOUNT)}
-                  </td>
-                  <td className="py-2.5 px-3 text-muted-foreground">{entry.REGISTERED_BY}</td>
-                </tr>
-              ))}
+              {entries
+                .sort((a, b) => b.DATE.localeCompare(a.DATE))
+                .map((entry) => (
+                  <tr
+                    key={entry.ID}
+                    className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                  >
+                    <td className="py-2.5 px-3">{entry.DATE}</td>
+                    <td className="py-2.5 px-3">
+                      <span
+                        className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                          entry.TYPE === "income"
+                            ? "bg-success/10 text-success"
+                            : "bg-destructive/10 text-destructive"
+                        }`}
+                      >
+                        {entry.TYPE === "income" ? "수입" : "지출"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3">{entry.CATEGORY}</td>
+                    <td className="py-2.5 px-3">{entry.CONTENT}</td>
+                    <td
+                      className={`py-2.5 px-3 text-right font-medium ${
+                        entry.TYPE === "income"
+                          ? "text-success"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {entry.TYPE === "income" ? "+" : "-"}
+                      {formatAmount(entry.AMOUNT)}
+                    </td>
+                    <td className="py-2.5 px-3 text-muted-foreground">
+                      {entry.REGISTERED_BY}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
 
         {/* Mobile card list */}
         <div className="sm:hidden space-y-2">
-          {entries.sort((a, b) => b.DATE.localeCompare(a.DATE)).map(entry => (
-            <div key={entry.ID} className="p-3 rounded-lg border border-border">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                  entry.TYPE === 'income'
-                    ? 'bg-success/10 text-success'
-                    : 'bg-destructive/10 text-destructive'
-                }`}>
-                  {entry.TYPE === 'income' ? '수입' : '지출'}
-                </span>
-                <span className="text-xs text-muted-foreground">{entry.DATE}</span>
+          {entries
+            .sort((a, b) => b.DATE.localeCompare(a.DATE))
+            .map((entry) => (
+              <div
+                key={entry.ID}
+                className="p-3 rounded-lg border border-border"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                      entry.TYPE === "income"
+                        ? "bg-success/10 text-success"
+                        : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {entry.TYPE === "income" ? "수입" : "지출"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {entry.DATE}
+                  </span>
+                </div>
+                <p className="text-sm font-medium">{entry.CONTENT}</p>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs text-muted-foreground">
+                    {entry.CATEGORY} · {entry.REGISTERED_BY}
+                  </span>
+                  <span
+                    className={`text-sm font-bold ${
+                      entry.TYPE === "income"
+                        ? "text-success"
+                        : "text-destructive"
+                    }`}
+                  >
+                    {entry.TYPE === "income" ? "+" : "-"}
+                    {formatAmount(entry.AMOUNT)}
+                  </span>
+                </div>
               </div>
-              <p className="text-sm font-medium">{entry.CONTENT}</p>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-muted-foreground">{entry.CATEGORY} · {entry.REGISTERED_BY}</span>
-                <span className={`text-sm font-bold ${
-                  entry.TYPE === 'income' ? 'text-success' : 'text-destructive'
-                }`}>
-                  {entry.TYPE === 'income' ? '+' : '-'}{formatAmount(entry.AMOUNT)}
-                </span>
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
     </div>
