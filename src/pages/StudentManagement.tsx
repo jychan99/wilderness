@@ -109,7 +109,6 @@ const StudentManagement = () => {
   const toggleAttendanceMutation = useMutation({
     mutationFn: async (student: Pick<STUMAIN, 'USER_CODE' | 'NAME'>) => {
       const { USER_CODE, NAME } = student;
-      console.log('출석 토글 시작 - USER_CODE:', USER_CODE, 'NAME:', NAME, 'DATE:', attendanceDate);
       
       if (!USER_CODE) {
         throw new Error('USER_CODE가 없습니다.');
@@ -120,7 +119,6 @@ const StudentManagement = () => {
       if (existing) {
         // 기존 레코드가 있으면 PRESENT_YN 토글
         const newPresentYn = !existing.PRESENT_YN;
-        console.log('기존 출석 기록 업데이트 - PRESENT_YN:', newPresentYn);
         const { error } = await (supabase as any)
           .from('ATTENDANCE')
           .update({ PRESENT_YN: newPresentYn })
@@ -132,7 +130,6 @@ const StudentManagement = () => {
         }
       } else {
         // 레코드가 없으면 INSERT (PRESENT_YN = true)
-        console.log('새로운 출석 기록 추가');
         const { error } = await (supabase as any).from('ATTENDANCE').insert([{
           USER_CODE: USER_CODE,
           NAME: NAME,
@@ -232,7 +229,6 @@ const StudentManagement = () => {
       FAMILY_CONTACT: form.FAMILY_CONTACT || '',
       NOTE: form.NOTE || '',
     } as any;
-    console.log('전송할 학생 데이터:', newStudent);  // 디버깅용
     addStudentMutation.mutate(newStudent);
   };
 
@@ -554,9 +550,7 @@ const StudentManagement = () => {
                     <Checkbox
                       checked={isPresent(student.USER_CODE)}
                       onCheckedChange={() => {
-                        console.log('체크박스 클릭 - 학생:', student.NAME, 'USER_CODE:', student.USER_CODE);
                         if (!student.USER_CODE) {
-                          console.error('USER_CODE가 없습니다!', student);
                           alert('학생 정보에 문제가 있습니다. USER_CODE가 없습니다.');
                           return;
                         }

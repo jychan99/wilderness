@@ -131,7 +131,6 @@ const Admin = () => {
   // 사용자 추가 mutation
   const addUserMutation = useMutation({
     mutationFn: async (newUser: Omit<USERMAIN, "USER_CODE">) => {
-      console.log("Inserting user:", newUser);
       const { data, error } = await (supabase as any)
         .from("USERMAIN")
         .insert([newUser]);
@@ -139,7 +138,6 @@ const Admin = () => {
         console.error("Insert error:", error);
         throw error;
       }
-      console.log("Insert success:", data);
       return data;
     },
     onSuccess: () => {
