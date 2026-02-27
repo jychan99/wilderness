@@ -138,4 +138,23 @@
     @apply bg-card border border-border p-4 shadow-sm;
     border-radius: var(--radius);
   }
+
+  /* Date input 스타일 개선 */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    font-size: 16px;
+    padding: 8px 10px;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+  }
+
+  input[type="date"]::-webkit-outer-spin-button,
+  input[type="date"]::-webkit-inner-spin-button {
+    display: none;
+  }
 }

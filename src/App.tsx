@@ -34,7 +34,7 @@ const AppContent = () => {
   const renderPage = () => {
     switch (accessibleTab) {
       case "dashboard":
-        return <Dashboard />;
+        return <Dashboard onTabChange={setCurrentTab} />;
       case "students":
         return <StudentManagement />;
       case "teachers":
@@ -48,7 +48,7 @@ const AppContent = () => {
       case "notifications":
         return <Notification />;
       default:
-        return <Dashboard />;
+        return <Dashboard onTabChange={setCurrentTab} />;
     }
   };
 

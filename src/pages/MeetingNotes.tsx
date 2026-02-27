@@ -108,8 +108,8 @@ const MeetingNotes = () => {
 
   if (!user) return null;
 
-  // 관리자 또는 특정 직책만 작성 가능
-  const isAdmin = Number(user.position) === 0 || user.role === "admin";
+  // 관리자, 부회장, 서기가 작성 가능
+  const isAuthorized = user.role === "admin" || user.position === "부회장" || user.position === "서기";
 
   // 오늘 날짜 (로컬 시간대 기준)
   const today = (() => {
@@ -183,7 +183,11 @@ const MeetingNotes = () => {
   };
 
   const canEditDelete =
-    selectedNote && (user?.name === selectedNote.AUTHOR || isAdmin);
+    selectedNote && 
+    (user?.name === selectedNote.AUTHOR || 
+     user?.role === "admin" ||
+     user?.position === "부회장" || 
+     user?.position === "서기");
 
   // 수정 모드
   if (selectedNote && isEditMode) {
@@ -290,7 +294,7 @@ const MeetingNotes = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">총 {notes.length}건</p>
-        {isAdmin && (
+        {isAuthorized && (
           <Dialog open={showWrite} onOpenChange={setShowWrite}>
             <DialogTrigger asChild>
               <Button size="sm">

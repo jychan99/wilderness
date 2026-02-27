@@ -15,7 +15,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-const Dashboard = () => {
+interface DashboardProps {
+  onTabChange: (tab: string) => void;
+}
+
+const Dashboard = ({ onTabChange }: DashboardProps) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -255,7 +259,7 @@ const Dashboard = () => {
             {weekDays.map((day) => (
               <div
                 key={day}
-                className="bg-muted p-1 sm:p-2 text-center text-[10px] sm:text-xs font-medium text-muted-foreground"
+                className="bg-muted p-1 sm:p-2 text-center text-xs sm:text-base font-medium text-muted-foreground"
               >
                 {day}
               </div>
@@ -268,14 +272,14 @@ const Dashboard = () => {
               return (
                 <div
                   key={i}
-                  className={`min-h-[48px] sm:min-h-[80px] p-1 sm:p-1.5 ${
+                  className={`min-h-[72px] sm:min-h-[120px] p-1 sm:p-1.5 ${
                     day ? "bg-card" : "bg-muted/50"
                   }`}
                 >
                   {day && (
                     <>
                       <span
-                        className={`text-xs font-medium ${
+                        className={`text-sm font-medium ${
                           i % 7 === 0
                             ? "text-destructive"
                             : i % 7 === 6
@@ -285,11 +289,11 @@ const Dashboard = () => {
                       >
                         {day}
                       </span>
-                      <div className="mt-1 space-y-1 max-h-[40px] sm:max-h-[56px] overflow-y-auto pr-1 calendar-scrollbar">
+                      <div className="mt-1 space-y-1 max-h-[60px] sm:max-h-[84px] overflow-y-auto pr-1 calendar-scrollbar">
                         {getEventsForDay(day).map((event) => (
                           <div
                             key={event.ID}
-                            className="text-[10px] px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary font-semibold truncate cursor-pointer hover:bg-primary/15"
+                            className="text-[15px] px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary font-semibold truncate cursor-pointer hover:bg-primary/15"
                             title={event.TITLE}
                             role="button"
                             tabIndex={0}
@@ -341,9 +345,13 @@ const Dashboard = () => {
 
       {/* Latest Meeting Note */}
       <div className="card-classic p-5">
-        <h3 className="font-heading font-semibold text-lg mb-3">
+        <button
+          onClick={() => onTabChange('meetings')}
+          className="font-heading font-semibold text-lg mb-3 hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
+        >
           📝 최근 회의록
-        </h3>
+          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </button>
         {meetingLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin" />
@@ -369,7 +377,13 @@ const Dashboard = () => {
 
       {/* Chairman Notifications */}
       <div className="card-classic p-5">
-        <h3 className="font-heading font-semibold text-lg mb-3">📢 공지사항</h3>
+        <button
+          onClick={() => onTabChange('notifications')}
+          className="font-heading font-semibold text-lg mb-3 hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
+        >
+          📢 공지사항
+          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </button>
         {chairmanNotificationsLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin" />

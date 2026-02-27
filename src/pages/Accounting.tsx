@@ -28,6 +28,8 @@ import {
   TrendingDown,
   Wallet,
   BarChart3,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   PieChart,
@@ -44,6 +46,7 @@ const Accounting = () => {
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
   const [showChart, setShowChart] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<ACCOUNT | null>(null);
   const [dateRange, setDateRange] = useState({
     start: "",
     end: "",
@@ -117,6 +120,54 @@ const Accounting = () => {
       toast({
         title: "거래 추가 실패",
         description: errorMessage,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // 거래 수정 뮤테이션
+  const editEntryMutation = useMutation({
+    mutationFn: async (entry: ACCOUNT) => {
+      const { error } = await (supabase as any)
+        .from("ACCOUNT")
+        .update(entry)
+        .eq("ID", entry.ID);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounting_entries"] });
+      setEditingEntry(null);
+      toast({
+        title: "거래 수정 완료",
+        description: "거래 내역이 성공적으로 수정되었습니다.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "거래 수정 실패",
+        description: "거래 내역 수정 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // 거래 삭제 뮤테이션
+  const deleteEntryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("ACCOUNT").delete().eq("ID", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounting_entries"] });
+      toast({
+        title: "거래 삭제 완료",
+        description: "거래 내역이 성공적으로 삭제되었습니다.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "거래 삭제 실패",
+        description: "거래 내역 삭제 중 오류가 발생했습니다.",
         variant: "destructive",
       });
     },
@@ -214,6 +265,9 @@ const Accounting = () => {
 
   if (!user) return null;
 
+  // 총무 권한 확인
+  const isTreasurer = user.position === "총무" || user.position === "3";
+
   const handleAdd = () => {
     // 입력 검증
     if (!form.date) {
@@ -237,7 +291,7 @@ const Accounting = () => {
       });
       return;
     }
-    if (!form.amount || parseInt(form.amount, 10) <= 0) {
+    if (!form.amount || parseInt(form.amount.replace(/,/g, ''), 10) <= 0) {
       toast({
         title: "올바른 금액을 입력해주세요",
         variant: "destructive",
@@ -251,7 +305,7 @@ const Accounting = () => {
       TYPE: form.type,
       CATEGORY: form.category.trim(),
       CONTENT: form.description.trim(),
-      AMOUNT: parseInt(form.amount, 10),
+      AMOUNT: parseInt(form.amount.replace(/,/g, ''), 10),
       REGISTERED_BY: user?.name || "관리자",
     };
     addEntryMutation.mutate(entry);
@@ -259,6 +313,51 @@ const Accounting = () => {
 
   const formatAmount = (amount: number) =>
     amount.toLocaleString("ko-KR") + "원";
+
+  // 금액 입력 포맷팅 (쉼표 추가)
+  const formatNumberInput = (value: string) => {
+    const digits = value.replace(/\D/g, ''); // 숫자만 추출
+    if (!digits) return '';
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ','); // 쉼표 추가
+  };
+
+  const handleEdit = (entry: ACCOUNT) => {
+    setEditingEntry(entry);
+    setForm({
+      date: entry.DATE,
+      type: entry.TYPE,
+      category: entry.CATEGORY,
+      description: entry.CONTENT,
+      amount: entry.AMOUNT.toLocaleString("ko-KR"),
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingEntry) return;
+    if (!form.date || !form.category.trim() || !form.description.trim() || !form.amount) {
+      toast({
+        title: "모든 항목을 입력해주세요",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updatedEntry: ACCOUNT = {
+      ...editingEntry,
+      DATE: form.date,
+      TYPE: form.type,
+      CATEGORY: form.category.trim(),
+      CONTENT: form.description.trim(),
+      AMOUNT: parseInt(form.amount.replace(/,/g, ''), 10),
+    };
+    editEntryMutation.mutate(updatedEntry);
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm("정말 삭제하시겠습니까?")) {
+      deleteEntryMutation.mutate(id);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -318,6 +417,7 @@ const Accounting = () => {
                   onChange={(e) =>
                     setDateRange({ ...dateRange, start: e.target.value })
                   }
+                  className="h-11 text-base"
                 />
               </div>
               <div className="flex-1 space-y-1.5">
@@ -328,6 +428,7 @@ const Accounting = () => {
                   onChange={(e) =>
                     setDateRange({ ...dateRange, end: e.target.value })
                   }
+                  className="h-11 text-base"
                 />
               </div>
               <Button
@@ -499,6 +600,7 @@ const Accounting = () => {
                     type="date"
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="h-11 text-base"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -541,10 +643,11 @@ const Accounting = () => {
                 <div className="space-y-1.5">
                   <Label>금액</Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={form.amount}
                     onChange={(e) =>
-                      setForm({ ...form, amount: e.target.value })
+                      setForm({ ...form, amount: formatNumberInput(e.target.value) })
                     }
                     placeholder="금액 (원)"
                   />
@@ -560,6 +663,84 @@ const Accounting = () => {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Edit Dialog */}
+        <Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="font-heading">내역 수정</DialogTitle>
+            </DialogHeader>
+            {editingEntry && (
+              <div className="space-y-3 pt-2">
+                <div className="space-y-1.5">
+                  <Label>날짜</Label>
+                  <Input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="h-11 text-base"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>구분</Label>
+                  <Select
+                    value={form.type}
+                    onValueChange={(v) =>
+                      setForm({ ...form, type: v as "income" | "expense" })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="income">수입</SelectItem>
+                      <SelectItem value="expense">지출</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>분류</Label>
+                  <Input
+                    value={form.category}
+                    onChange={(e) =>
+                      setForm({ ...form, category: e.target.value })
+                    }
+                    placeholder="예: 헌금, 교재비"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>내용</Label>
+                  <Input
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({ ...form, description: e.target.value })
+                    }
+                    placeholder="거래 내용"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>금액</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.amount}
+                    onChange={(e) =>
+                      setForm({ ...form, amount: formatNumberInput(e.target.value) })
+                    }
+                    placeholder="금액 (원)"
+                  />
+                </div>
+                <Button
+                  onClick={handleSaveEdit}
+                  className="w-full"
+                  disabled={editEntryMutation.isPending}
+                >
+                  {editEntryMutation.isPending ? "수정 중..." : "수정"}
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Desktop table */}
         <div className="hidden sm:block overflow-x-auto">
@@ -583,6 +764,8 @@ const Accounting = () => {
                 </th>
                 <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">
                   등록자
+                </th>
+                <th className="text-center py-2.5 px-3 text-muted-foreground font-medium">
                 </th>
               </tr>
             </thead>
@@ -621,6 +804,28 @@ const Accounting = () => {
                     <td className="py-2.5 px-3 text-muted-foreground">
                       {entry.REGISTERED_BY}
                     </td>
+                    <td className="py-2.5 px-3 text-center space-x-1">
+                      {isTreasurer && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 inline-flex"
+                            onClick={() => handleEdit(entry)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 inline-flex text-destructive"
+                            onClick={() => handleDelete(entry.ID)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
             </tbody>
@@ -655,16 +860,38 @@ const Accounting = () => {
                   <span className="text-xs text-muted-foreground">
                     {entry.CATEGORY} · {entry.REGISTERED_BY}
                   </span>
-                  <span
-                    className={`text-sm font-bold ${
-                      entry.TYPE === "income"
-                        ? "text-success"
-                        : "text-destructive"
-                    }`}
-                  >
-                    {entry.TYPE === "income" ? "+" : "-"}
-                    {formatAmount(entry.AMOUNT)}
-                  </span>
+                  <div className="flex gap-1">
+                    <span
+                      className={`text-sm font-bold ${
+                        entry.TYPE === "income"
+                          ? "text-success"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {entry.TYPE === "income" ? "+" : "-"}
+                      {formatAmount(entry.AMOUNT)}
+                    </span>
+                    {isTreasurer && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleEdit(entry)}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => handleDelete(entry.ID)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

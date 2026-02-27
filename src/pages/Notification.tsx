@@ -22,6 +22,7 @@ const Notification = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedNotification, setSelectedNotification] =
     useState<NOTIFICATION | null>(null);
+  const [isDetailMode, setIsDetailMode] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [notificationForm, setNotificationForm] = useState({
     title: "",
@@ -33,6 +34,9 @@ const Notification = () => {
   });
 
   if (!user) return null;
+
+  // 관리자, 회장만 수정/삭제 가능
+  const canEditDelete = user.position === "0" || user.position === "1";
 
   // 회장 공지사항 목록 조회
   const { data: notifications = [] } = useQuery<NOTIFICATION[], Error>({
@@ -96,9 +100,17 @@ const Notification = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      setEditForm({ title: "", content: "" });
-      setIsEditMode(false);
-      setSelectedNotification(null);
+      // 수정된 데이터를 다시 불러와서 selectedNotification 업데이트
+      if (selectedNotification) {
+        supabase
+          .from("NOTIFICATION")
+          .select("*")
+          .eq("ID", selectedNotification.ID)
+          .single()
+          .then(({ data }) => {
+            if (data) setSelectedNotification(data);
+          });
+      }
     },
     onError: (error) => {
       alert("공지사항 수정 중 오류가 발생했습니다: " + (error as any).message);
@@ -122,11 +134,22 @@ const Notification = () => {
   const handleDeleteNotification = (notificationId: string) => {
     if (!confirm("정말 삭제하시겠습니까?")) return;
     deleteNotificationMutation.mutate(notificationId);
+    setSelectedNotification(null);
+    setIsDetailMode(false);
   };
 
-  const handleEditStart = (notification: NOTIFICATION) => {
+  const handleShowDetail = (notification: NOTIFICATION) => {
     setSelectedNotification(notification);
-    setEditForm({ title: notification.TITLE, content: notification.CONTENT });
+    setIsDetailMode(true);
+    setIsEditMode(false);
+  };
+
+  const handleStartEdit = () => {
+    if (!selectedNotification) return;
+    setEditForm({ 
+      title: selectedNotification.TITLE, 
+      content: selectedNotification.CONTENT 
+    });
     setIsEditMode(true);
   };
 
@@ -138,11 +161,19 @@ const Notification = () => {
       TITLE: editForm.title,
       CONTENT: editForm.content,
     });
+    // 저장 후 수정 모드만 종료 (상세보기는 유지)
+    setIsEditMode(false);
   };
 
   const handleEditCancel = () => {
     setIsEditMode(false);
+    setEditForm({ title: "", content: "" });
+  };
+
+  const handleCloseDetail = () => {
     setSelectedNotification(null);
+    setIsDetailMode(false);
+    setIsEditMode(false);
     setEditForm({ title: "", content: "" });
   };
 
@@ -206,30 +237,78 @@ const Notification = () => {
     );
   }
 
+  // 상세보기 모드
+  if (isDetailMode && selectedNotification) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={handleCloseDetail}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          목록으로
+        </Button>
+        <div className="card-classic p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start gap-3 flex-1">
+              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Bell className="w-6 h-6 text-blue-500" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-heading text-xl font-bold mb-2">
+                  {selectedNotification.TITLE}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {formatDateTime(selectedNotification.CREATED_AT)} · {selectedNotification.AUTHOR}
+                </p>
+              </div>
+            </div>
+          </div>
+          <hr className="my-4" />
+          <div className="whitespace-pre-wrap text-sm leading-relaxed mb-6">
+            {selectedNotification.CONTENT}
+          </div>
+          <div className="flex gap-3">
+            {canEditDelete && (
+              <Button onClick={handleStartEdit} className="flex-1">
+                수정
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleCloseDetail}
+              className="flex-1"
+            >
+              취소
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">공지사항</p>
-        <Dialog open={showAdd} onOpenChange={setShowAdd}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              공지사항 등록
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="font-heading">공지사항 등록</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-1.5">
-                <Label>제목</Label>
-                <Input
-                  value={notificationForm.title}
-                  onChange={(e) =>
-                    setNotificationForm({
-                      ...notificationForm,
-                      title: e.target.value,
+        {canEditDelete && (
+          <Dialog open={showAdd} onOpenChange={setShowAdd}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="w-4 h-4 mr-1.5" />
+                공지사항 등록
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="font-heading">공지사항 등록</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label>제목</Label>
+                  <Input
+                    value={notificationForm.title}
+                    onChange={(e) =>
+                      setNotificationForm({
+                        ...notificationForm,
+                        title: e.target.value,
                     })
                   }
                   placeholder="공지사항 제목"
@@ -259,6 +338,7 @@ const Notification = () => {
             </div>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Notification List */}
@@ -267,7 +347,7 @@ const Notification = () => {
           <div
             key={notification.ID}
             className="card-classic p-4 hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => handleEditStart(notification)}
+            onClick={() => handleShowDetail(notification)}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3 flex-1">
@@ -286,17 +366,19 @@ const Notification = () => {
                   </p>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteNotification(notification.ID);
-                }}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+              {canEditDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteNotification(notification.ID);
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
             </div>
           </div>
         ))}

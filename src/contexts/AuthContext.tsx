@@ -4,14 +4,14 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const mapGradeValue = (grade: USERMAIN['GRADE']): string => {
+const mapGradeValue = (grade: USERMAIN['MANAGE_GRADE']): string => {
   const gradeValue = String(grade ?? '');
   const gradeMap: Record<string, string> = {
     '0': '유치부',
@@ -29,7 +29,7 @@ const mapGradeValue = (grade: USERMAIN['GRADE']): string => {
 
 const mapUserMainToUser = (userMain: USERMAIN): User => {
   const positionValue = String(userMain.POSITION ?? '');
-  const isAdmin = positionValue === '0' || userMain.POSITION === '회장' || userMain.POSITION === '부회장';
+  const isAdmin = positionValue === '0' || userMain.POSITION === 1 || userMain.POSITION === 2;
   const role = isAdmin ? 'admin' : 'teacher';
 
   return {
@@ -38,7 +38,7 @@ const mapUserMainToUser = (userMain: USERMAIN): User => {
     name: userMain.NAME,
     baptismalName: userMain.BAP_NAME,
     position: positionValue,
-    grade: isAdmin ? '모든학년' : mapGradeValue(userMain.GRADE),
+    grade: isAdmin ? '모든학년' : mapGradeValue(userMain.MANAGE_GRADE),
     role,
   };
 };

@@ -449,7 +449,7 @@ const StudentManagement = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">
-                        출석 {records.filter(r => r.PRESENT_YN).length}/{records.length}
+                        출석 {records.filter(r => r.PRESENT_YN).length}
                       </span>
                       <span className={`text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
                     </div>
@@ -460,17 +460,15 @@ const StudentManagement = () => {
                         <p className="text-xs text-muted-foreground">출석 기록이 없습니다.</p>
                       ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                          {records.map(record => (
+                          {records
+                            .filter(r => r.PRESENT_YN)
+                            .map(record => (
                             <div
                               key={record.ID}
-                              className={`flex items-center gap-2 px-2.5 py-1.5 rounded text-xs font-medium ${
-                                record.PRESENT_YN
-                                  ? 'bg-success/10 text-success'
-                                  : 'bg-destructive/10 text-destructive'
-                              }`}
+                              className="flex items-center gap-2 px-2.5 py-1.5 rounded text-xs font-medium bg-success/10 text-success"
                             >
                               <span>{record.DATE}</span>
-                              <span>{record.PRESENT_YN ? '출석' : '결석'}</span>
+                              <span>출석</span>
                             </div>
                           ))}
                         </div>
@@ -547,6 +545,9 @@ const StudentManagement = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-xs text-muted-foreground">
+                      {isPresent(student.USER_CODE) ? '출석' : '결석'}
+                    </p>
                     <Checkbox
                       checked={isPresent(student.USER_CODE)}
                       onCheckedChange={() => {

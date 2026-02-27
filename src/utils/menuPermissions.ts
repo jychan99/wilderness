@@ -14,6 +14,10 @@ export const MENU_PERMISSIONS = {
     label: "대시보드",
     allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL
   },
+    notifications: {
+    label: "공지사항",
+    allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL
+  },
   students: {
     label: "학생관리",
     allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL
@@ -24,7 +28,7 @@ export const MENU_PERMISSIONS = {
   },
   meetings: {
     label: "회의록",
-    allowedPositions: ["0", "2", "4"], // 관리자, 부회장, 서기
+    allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL
   },
   accounting: {
     label: "전산회계",
@@ -33,10 +37,6 @@ export const MENU_PERMISSIONS = {
   admin: {
     label: "관리자",
     allowedPositions: ["0"], // 관리자 ONLY
-  },
-  notifications: {
-    label: "공지사항",
-    allowedPositions: ["0", "1"], // 회장 ONLY
   },
 };
 
@@ -71,4 +71,21 @@ export const getPositionLabel = (positionCode: string | undefined): string => {
     "5": "일반",
   };
   return positionMap[positionCode || "5"] || "일반";
+};
+
+// 학년코드를 한글명으로 변환
+export const getGradeLabel = (gradeCode: string | undefined): string => {
+  const gradeMap: Record<string, string> = {
+    "0": "모든학년",
+    "1": "유치부",
+    "2": "초등부",
+    "3": "중등부",
+    "4": "고등부",
+    "모든학년": "모든학년",
+    "유치부": "유치부",
+    "초등부": "초등부",
+    "중등부": "중등부",
+    "고등부": "고등부",
+  };
+  return gradeMap[gradeCode || "0"] || gradeCode || "모든학년";
 };

@@ -66,7 +66,7 @@ const Login = () => {
 
           <div className="mt-6 pt-4 border-t border-border">
             <p className="text-xs text-muted-foreground text-center">
-              최초계정은 관리자에게 문의바랍니다. &copy; jychan99
+              최초계정은 개발자에게 문의바랍니다. &copy; jychan99
             </p>
           </div>
         </div>

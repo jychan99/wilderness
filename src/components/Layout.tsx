@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { canAccessMenu, getPositionLabel } from "@/utils/menuPermissions";
+import { canAccessMenu, getPositionLabel, getGradeLabel } from "@/utils/menuPermissions";
 import {
   LayoutDashboard,
   Users,
@@ -241,17 +241,24 @@ const Layout = ({ children, currentTab, onTabChange }: LayoutProps) => {
             <button
               type="button"
               onClick={openProfile}
-              className="w-full flex items-center gap-3 mb-3 text-left rounded-lg hover:bg-sidebar-accent/50 p-2"
+              className="w-full flex items-start gap-3 mb-3 text-left rounded-lg hover:bg-sidebar-accent/50 p-3 transition-colors"
             >
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary flex-shrink-0">
                 {user.name.charAt(0)}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">
-                  {user.name}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {getPositionLabel(user.position)} · {user.grade}
+              <div className="flex-1 min-w-0 space-y-0.5">
+                <div className="flex items-baseline gap-2">
+                  <p className="text-sm font-semibold text-sidebar-foreground truncate">
+                    {user.name}
+                  </p>
+                  {user.baptismalName && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {user.baptismalName}
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {getPositionLabel(user.position)} · {getGradeLabel(user.grade)}
                 </p>
               </div>
             </button>
