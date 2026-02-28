@@ -4,7 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SCHEDULE, MEETING, NOTIFICATION } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { ChevronLeft, ChevronRight, Plus, Loader2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Loader2,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +35,8 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
     description: "",
   });
   const [selectedEvent, setSelectedEvent] = useState<SCHEDULE | null>(null);
+  const [editingEvent, setEditingEvent] = useState<SCHEDULE | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   const queryClient = useQueryClient();
 
   // 캘린더 이벤트 조회
@@ -114,6 +123,44 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
       queryClient.invalidateQueries({ queryKey: ["calendar_events"] });
       setNewEvent({ title: "", date: "", description: "" });
       setShowAddEvent(false);
+    },
+  });
+
+  // 이벤트 수정 뮤테이션
+  const editEventMutation = useMutation<void, Error, SCHEDULE>({
+    mutationFn: async (event: SCHEDULE) => {
+      const { error } = await (supabase as any)
+        .from("SCHEDULE")
+        .update({
+          TITLE: event.TITLE,
+          DATE: event.DATE,
+          CONTENT: event.CONTENT,
+        })
+        .eq("ID", event.ID);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar_events"] });
+      setEditingEvent(null);
+      setIsEditMode(false);
+      setSelectedEvent(null);
+    },
+  });
+
+  // 이벤트 삭제 뮤테이션
+  const deleteEventMutation = useMutation<void, Error, string>({
+    mutationFn: async (eventId: string) => {
+      const { error } = await supabase
+        .from("SCHEDULE")
+        .delete()
+        .eq("ID", eventId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar_events"] });
+      setSelectedEvent(null);
+      setEditingEvent(null);
+      setIsEditMode(false);
     },
   });
 
@@ -318,26 +365,157 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
         )}
       </div>
 
+      {/* Today's Schedule */}
+      <div className="card-classic p-5">
+        <h3 className="font-heading font-semibold text-base sm:text-lg mb-4">
+          📌 오늘 일정
+        </h3>
+        {eventsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        ) : getEventsForDay(new Date().getDate()).length > 0 ? (
+          <div className="space-y-2">
+            {getEventsForDay(new Date().getDate()).map((event) => (
+              <button
+                key={event.ID}
+                onClick={() => setSelectedEvent(event)}
+                className="w-full text-left p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+              >
+                <p className="font-semibold text-base text-foreground">
+                  {event.TITLE}
+                </p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-sm text-muted-foreground py-8">
+            오늘 일정이 없습니다.
+          </p>
+        )}
+      </div>
+
       {/* Event Detail */}
       <Dialog
-        open={!!selectedEvent}
+        open={!!selectedEvent && !isEditMode}
         onOpenChange={(open) => !open && setSelectedEvent(null)}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-heading">details</DialogTitle>
+            <DialogTitle className="font-heading">일정 상세</DialogTitle>
           </DialogHeader>
           {selectedEvent && (
             <div className="space-y-3">
               <div>
-                <p className="font-medium">{selectedEvent.TITLE}</p>
+                <p className="text-sm font-semibold text-muted-foreground">
+                  제목
+                </p>
+                <p className="font-medium text-base">{selectedEvent.TITLE}</p>
               </div>
-              <hr />
+              <div>
+                <hr />
+              </div>
               <div>
                 <p className="text-sm text-foreground/80 whitespace-pre-wrap">
                   {selectedEvent.CONTENT || "내용이 없습니다."}
                 </p>
               </div>
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    setEditingEvent(selectedEvent);
+                    setIsEditMode(true);
+                  }}
+                >
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  수정
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    if (confirm("일정을 삭제하시겠습니까?")) {
+                      deleteEventMutation.mutate(selectedEvent.ID);
+                    }
+                  }}
+                  disabled={deleteEventMutation.isPending}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  {deleteEventMutation.isPending ? "삭제 중..." : "삭제"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Event Edit */}
+      <Dialog
+        open={isEditMode && !!editingEvent}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsEditMode(false);
+            setEditingEvent(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-heading">일정 수정</DialogTitle>
+          </DialogHeader>
+          {editingEvent && (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label>제목</Label>
+                <Input
+                  value={editingEvent.TITLE}
+                  onChange={(e) =>
+                    setEditingEvent({ ...editingEvent, TITLE: e.target.value })
+                  }
+                  placeholder="일정 제목"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>날짜</Label>
+                <Input
+                  type="date"
+                  value={editingEvent.DATE}
+                  onChange={(e) =>
+                    setEditingEvent({ ...editingEvent, DATE: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>설명</Label>
+                <Textarea
+                  value={editingEvent.CONTENT}
+                  onChange={(e) =>
+                    setEditingEvent({
+                      ...editingEvent,
+                      CONTENT: e.target.value,
+                    })
+                  }
+                  placeholder="일정 설명 (선택)"
+                />
+              </div>
+              <Button
+                onClick={() => editEventMutation.mutate(editingEvent)}
+                className="w-full"
+                disabled={editEventMutation.isPending}
+              >
+                {editEventMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    저장 중...
+                  </>
+                ) : (
+                  "저장"
+                )}
+              </Button>
             </div>
           )}
         </DialogContent>
@@ -346,7 +524,7 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
       {/* Latest Meeting Note */}
       <div className="card-classic p-5">
         <button
-          onClick={() => onTabChange('meetings')}
+          onClick={() => onTabChange("meetings")}
           className="font-heading font-semibold text-lg mb-3 hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
         >
           📝 최근 회의록
@@ -378,7 +556,7 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
       {/* Chairman Notifications */}
       <div className="card-classic p-5">
         <button
-          onClick={() => onTabChange('notifications')}
+          onClick={() => onTabChange("notifications")}
           className="font-heading font-semibold text-lg mb-3 hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
         >
           📢 공지사항
