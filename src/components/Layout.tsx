@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +11,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { canAccessMenu, getPositionLabel, getGradeLabel } from "@/utils/menuPermissions";
+import {
+  canAccessMenu,
+  getPositionLabel,
+  getGradeLabel,
+} from "@/utils/menuPermissions";
 import {
   LayoutDashboard,
   Users,
@@ -27,12 +32,12 @@ import { cn } from "@/lib/utils";
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentTab: string;
-  onTabChange: (tab: string) => void;
 }
 
-const Layout = ({ children, currentTab, onTabChange }: LayoutProps) => {
+const Layout = ({ children }: LayoutProps) => {
   const { user, logout, updateUser } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({
@@ -198,7 +203,7 @@ const Layout = ({ children, currentTab, onTabChange }: LayoutProps) => {
           <div className="p-5 border-b border-sidebar-border">
             <button
               onClick={() => {
-                onTabChange("dashboard");
+                navigate("/dashboard");
                 setSidebarOpen(false);
               }}
               className="w-full flex items-center gap-3 hover:opacity-80 transition-opacity"
@@ -221,12 +226,12 @@ const Layout = ({ children, currentTab, onTabChange }: LayoutProps) => {
                 <button
                   key={item.id}
                   onClick={() => {
-                    onTabChange(item.id);
+                    navigate(`/${item.id}`);
                     setSidebarOpen(false);
                   }}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    currentTab === item.id
+                    location.pathname === `/${item.id}`
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                   )}
@@ -258,7 +263,8 @@ const Layout = ({ children, currentTab, onTabChange }: LayoutProps) => {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {getPositionLabel(user.position)} · {getGradeLabel(user.grade)}
+                  {getPositionLabel(user.position)} ·{" "}
+                  {getGradeLabel(user.grade)}
                 </p>
               </div>
             </button>
@@ -288,7 +294,7 @@ const Layout = ({ children, currentTab, onTabChange }: LayoutProps) => {
               )}
             </button>
             <h2 className="font-heading font-semibold text-lg">
-              {navItems.find((n) => n.id === currentTab)?.label}
+              {navItems.find((n) => `/${n.id}` === location.pathname)?.label}
             </h2>
           </header>
           <div className="p-3 sm:p-4 lg:p-6 animate-fade-in">{children}</div>

@@ -14,7 +14,7 @@ export const MENU_PERMISSIONS = {
     label: "대시보드",
     allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL
   },
-    notifications: {
+  notifications: {
     label: "공지사항",
     allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL
   },
@@ -24,7 +24,7 @@ export const MENU_PERMISSIONS = {
   },
   teachers: {
     label: "교사관리",
-    allowedPositions: ["0", "1"], // 관리자, 회장 ONLY
+    allowedPositions: ["0", "1"], // 관리자, 회장
   },
   meetings: {
     label: "회의록",
@@ -32,7 +32,7 @@ export const MENU_PERMISSIONS = {
   },
   accounting: {
     label: "전산회계",
-    allowedPositions: ["0", "1", "2", "3"], // 관리자, 회장, 부회장, 총무
+    allowedPositions: ["0", "1", "3"], // 관리자, 회장, 총무
   },
   admin: {
     label: "관리자",
@@ -81,11 +81,11 @@ export const getGradeLabel = (gradeCode: string | undefined): string => {
     "2": "초등부",
     "3": "중등부",
     "4": "고등부",
-    "모든학년": "모든학년",
-    "유치부": "유치부",
-    "초등부": "초등부",
-    "중등부": "중등부",
-    "고등부": "고등부",
+    모든학년: "모든학년",
+    유치부: "유치부",
+    초등부: "초등부",
+    중등부: "중등부",
+    고등부: "고등부",
   };
   return gradeMap[gradeCode || "0"] || gradeCode || "모든학년";
 };

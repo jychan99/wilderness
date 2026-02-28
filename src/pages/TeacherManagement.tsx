@@ -165,8 +165,14 @@ const TeacherManagement = () => {
     return numberMap[numValue] || "모든학년";
   };
 
-  // 관리자(POSITION === 0)는 목록에서 제외
-  const filteredTeachers = teachers.filter((t) => t.POSITION !== 0);
+  // 관리자(POSITION === 0)는 목록에서 제외하고 이름순으로 정렬
+  const filteredTeachers = teachers
+    .filter((t) => t.POSITION !== 0)
+    .sort((a, b) => {
+      const nameA = a.NAME || "";
+      const nameB = b.NAME || "";
+      return nameA.localeCompare(nameB, "ko-KR");
+    });
 
   return (
     <div className="space-y-4">

@@ -291,7 +291,7 @@ const Accounting = () => {
       });
       return;
     }
-    if (!form.amount || parseInt(form.amount.replace(/,/g, ''), 10) <= 0) {
+    if (!form.amount || parseInt(form.amount.replace(/,/g, ""), 10) <= 0) {
       toast({
         title: "올바른 금액을 입력해주세요",
         variant: "destructive",
@@ -305,7 +305,7 @@ const Accounting = () => {
       TYPE: form.type,
       CATEGORY: form.category.trim(),
       CONTENT: form.description.trim(),
-      AMOUNT: parseInt(form.amount.replace(/,/g, ''), 10),
+      AMOUNT: parseInt(form.amount.replace(/,/g, ""), 10),
       REGISTERED_BY: user?.name || "관리자",
     };
     addEntryMutation.mutate(entry);
@@ -316,9 +316,9 @@ const Accounting = () => {
 
   // 금액 입력 포맷팅 (쉼표 추가)
   const formatNumberInput = (value: string) => {
-    const digits = value.replace(/\D/g, ''); // 숫자만 추출
-    if (!digits) return '';
-    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ','); // 쉼표 추가
+    const digits = value.replace(/\D/g, ""); // 숫자만 추출
+    if (!digits) return "";
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ","); // 쉼표 추가
   };
 
   const handleEdit = (entry: ACCOUNT) => {
@@ -334,7 +334,12 @@ const Accounting = () => {
 
   const handleSaveEdit = () => {
     if (!editingEntry) return;
-    if (!form.date || !form.category.trim() || !form.description.trim() || !form.amount) {
+    if (
+      !form.date ||
+      !form.category.trim() ||
+      !form.description.trim() ||
+      !form.amount
+    ) {
       toast({
         title: "모든 항목을 입력해주세요",
         variant: "destructive",
@@ -348,7 +353,7 @@ const Accounting = () => {
       TYPE: form.type,
       CATEGORY: form.category.trim(),
       CONTENT: form.description.trim(),
-      AMOUNT: parseInt(form.amount.replace(/,/g, ''), 10),
+      AMOUNT: parseInt(form.amount.replace(/,/g, ""), 10),
     };
     editEntryMutation.mutate(updatedEntry);
   };
@@ -647,7 +652,10 @@ const Accounting = () => {
                     inputMode="numeric"
                     value={form.amount}
                     onChange={(e) =>
-                      setForm({ ...form, amount: formatNumberInput(e.target.value) })
+                      setForm({
+                        ...form,
+                        amount: formatNumberInput(e.target.value),
+                      })
                     }
                     placeholder="금액 (원)"
                   />
@@ -665,7 +673,10 @@ const Accounting = () => {
         </div>
 
         {/* Edit Dialog */}
-        <Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
+        <Dialog
+          open={!!editingEntry}
+          onOpenChange={(open) => !open && setEditingEntry(null)}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="font-heading">내역 수정</DialogTitle>
@@ -725,7 +736,10 @@ const Accounting = () => {
                     inputMode="numeric"
                     value={form.amount}
                     onChange={(e) =>
-                      setForm({ ...form, amount: formatNumberInput(e.target.value) })
+                      setForm({
+                        ...form,
+                        amount: formatNumberInput(e.target.value),
+                      })
                     }
                     placeholder="금액 (원)"
                   />
@@ -765,8 +779,7 @@ const Accounting = () => {
                 <th className="text-left py-2.5 px-3 text-muted-foreground font-medium">
                   등록자
                 </th>
-                <th className="text-center py-2.5 px-3 text-muted-foreground font-medium">
-                </th>
+                <th className="text-center py-2.5 px-3 text-muted-foreground font-medium"></th>
               </tr>
             </thead>
             <tbody>

@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { useAuth, AuthProvider } from "@/contexts/AuthContext";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { canAccessMenu } from "@/utils/menuPermissions";
 import Login from "@/pages/Login";
 import Layout from "@/components/Layout";
@@ -19,42 +19,78 @@ const queryClient = new QueryClient();
 
 const AppContent = () => {
   const { user } = useAuth();
-  const [currentTab, setCurrentTab] = useState("dashboard");
 
   if (!user) return <Login />;
 
-  // 사용자가 접근 권한이 없는 메뉴로 접근하려고 하면 대시보드로 리다이렉트
-  const accessibleTab = canAccessMenu(
-    user.position,
-    currentTab as keyof typeof canAccessMenu,
-  )
-    ? currentTab
-    : "dashboard";
-
-  const renderPage = () => {
-    switch (accessibleTab) {
-      case "dashboard":
-        return <Dashboard onTabChange={setCurrentTab} />;
-      case "students":
-        return <StudentManagement />;
-      case "teachers":
-        return <TeacherManagement />;
-      case "meetings":
-        return <MeetingNotes />;
-      case "accounting":
-        return <Accounting />;
-      case "admin":
-        return <Admin />;
-      case "notifications":
-        return <Notification />;
-      default:
-        return <Dashboard onTabChange={setCurrentTab} />;
+  // 권한 체크 컴포넌트
+  const ProtectedRoute = ({
+    children,
+    menuKey,
+  }: {
+    children: React.ReactNode;
+    menuKey: string;
+  }) => {
+    if (!canAccessMenu(user.position, menuKey as any)) {
+      return <Navigate to="/" replace />;
     }
+    return <>{children}</>;
   };
 
   return (
-    <Layout currentTab={accessibleTab} onTabChange={setCurrentTab}>
-      {renderPage()}
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route
+          path="/students"
+          element={
+            <ProtectedRoute menuKey="students">
+              <StudentManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/teachers"
+          element={
+            <ProtectedRoute menuKey="teachers">
+              <TeacherManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/meetings"
+          element={
+            <ProtectedRoute menuKey="meetings">
+              <MeetingNotes />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/accounting"
+          element={
+            <ProtectedRoute menuKey="accounting">
+              <Accounting />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute menuKey="admin">
+              <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute menuKey="notifications">
+              <Notification />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Layout>
   );
 };
