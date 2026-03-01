@@ -95,21 +95,24 @@ export type Database = {
           USER_CODE: string;
           NAME: string;
           DATE: string;
-          PRESENT_YN: boolean;
+          MISSA_YN: boolean;
+          DOCTRINE_YN: boolean;
         };
         Insert: {
           ID: string;
           USER_CODE: string;
           NAME: string;
           DATE: string;
-          PRESENT_YN: boolean;
+          MISSA_YN: boolean;
+          DOCTRINE_YN: boolean;
         };
         Update: {
           ID?: string;
           USER_CODE?: string;
           NAME?: string;
           DATE?: string;
-          PRESENT_YN?: boolean;
+          MISSA_YN?: boolean;
+          DOCTRINE_YN?: boolean;
         };
       };
       ACCOUNT: {

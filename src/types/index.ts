@@ -51,7 +51,8 @@ export interface ATTENDANCE {
   USER_CODE: string;
   NAME: string;
   DATE: string; // YYYY-MM-DD
-  PRESENT_YN: boolean;
+  MISSA_YN: boolean;
+  DOCTRINE_YN: boolean;
 }
 
 //회의록

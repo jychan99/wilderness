@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SCHEDULE, MEETING, NOTIFICATION } from "@/types";
+import { SCHEDULE, MEETING, NOTIFICATION, STUMAIN } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft,
@@ -65,6 +65,16 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
         .order("DATE", { ascending: false })
         .order("ID", { ascending: false })
         .limit(1);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 학생 축일 조회
+  const { data: students = [] } = useQuery<STUMAIN[], Error>({
+    queryKey: ["students"],
+    queryFn: async (): Promise<STUMAIN[]> => {
+      const { data, error } = await supabase.from("STUMAIN").select("*");
       if (error) throw error;
       return data || [];
     },
@@ -172,6 +182,34 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayStr = new Date().toISOString().split("T")[0];
+  const [todayMonthPart, todayDayPart] = todayStr.split("-");
+  const todayMonthDay = `${todayMonthPart}-${todayDayPart}`;
+
+  const feastLabelsByMonthDay = useMemo(() => {
+    const map = new Map<string, string[]>();
+
+    students.forEach((student) => {
+      if (!student.NAME_DAY) return;
+
+      const [monthPart, dayPart] = student.NAME_DAY.split("-");
+      const feastMonth = Number(monthPart);
+      const feastDay = Number(dayPart);
+      const monthKey = String(feastMonth).padStart(2, "0");
+      const dayKey = String(feastDay).padStart(2, "0");
+      const monthDayKey = `${monthKey}-${dayKey}`;
+      const feastLabel = `${student.NAME}${student.BAP_NAME ? ` ${student.BAP_NAME}` : ""} 축일`;
+
+      if (!Number.isFinite(feastMonth) || !Number.isFinite(feastDay)) {
+        return;
+      }
+
+      const existing = map.get(monthDayKey) || [];
+      existing.push(feastLabel);
+      map.set(monthDayKey, existing);
+    });
+
+    return map;
+  }, [students]);
 
   const days: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) days.push(null);
@@ -181,6 +219,9 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return events.filter((e) => e.DATE === dateStr);
   };
+
+  const todayEvents = events.filter((e) => e.DATE === todayStr);
+  const todayFeastLabels = feastLabelsByMonthDay.get(todayMonthDay) || [];
 
   const handleAddEvent = () => {
     if (!newEvent.title || !newEvent.date) return;
@@ -316,6 +357,12 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
                 ? `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                 : "";
               const isToday = day ? dateStr === todayStr : false;
+              const monthDayKey = day
+                ? `${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+                : "";
+              const feastLabels = day
+                ? feastLabelsByMonthDay.get(monthDayKey) || []
+                : [];
               return (
                 <div
                   key={i}
@@ -336,6 +383,14 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
                       >
                         {day}
                       </span>
+                      {feastLabels.length > 0 && (
+                        <p
+                          className="mt-1 text-[10px] sm:text-xs font-semibold text-primary truncate"
+                          title={feastLabels.join(", ")}
+                        >
+                          {feastLabels.join(", ")}
+                        </p>
+                      )}
                       <div className="mt-1 space-y-1 max-h-[60px] sm:max-h-[84px] overflow-y-auto pr-1 calendar-scrollbar">
                         {getEventsForDay(day).map((event) => (
                           <div
@@ -374,9 +429,17 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
-        ) : getEventsForDay(new Date().getDate()).length > 0 ? (
+        ) : todayEvents.length > 0 || todayFeastLabels.length > 0 ? (
           <div className="space-y-2">
-            {getEventsForDay(new Date().getDate()).map((event) => (
+            {todayFeastLabels.map((feastLabel) => (
+              <p
+                key={feastLabel}
+                className="p-3 rounded-lg border border-primary/30 bg-primary/10 text-primary font-semibold"
+              >
+                {feastLabel}
+              </p>
+            ))}
+            {todayEvents.map((event) => (
               <button
                 key={event.ID}
                 onClick={() => setSelectedEvent(event)}

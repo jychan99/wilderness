@@ -108,8 +108,14 @@ const MeetingNotes = () => {
 
   if (!user) return null;
 
+  const isViceChairOrSecretary =
+    user.position === "2" ||
+    user.position === "4" ||
+    user.position === "부회장" ||
+    user.position === "서기";
+
   // 관리자, 부회장, 서기가 작성 가능
-  const isAuthorized = user.role === "admin" || user.position === "부회장" || user.position === "서기";
+  const isAuthorized = user.role === "admin" || isViceChairOrSecretary;
 
   // 오늘 날짜 (로컬 시간대 기준)
   const today = (() => {
@@ -183,11 +189,10 @@ const MeetingNotes = () => {
   };
 
   const canEditDelete =
-    selectedNote && 
-    (user?.name === selectedNote.AUTHOR || 
-     user?.role === "admin" ||
-     user?.position === "부회장" || 
-     user?.position === "서기");
+    selectedNote &&
+    (user?.name === selectedNote.AUTHOR ||
+      user?.role === "admin" ||
+      isViceChairOrSecretary);
 
   // 수정 모드
   if (selectedNote && isEditMode) {

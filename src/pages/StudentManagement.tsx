@@ -173,11 +173,15 @@ const StudentManagement = () => {
     },
   });
 
+  type AttendanceField = "MISSA_YN" | "DOCTRINE_YN";
+
   // 출석 토글
   const toggleAttendanceMutation = useMutation({
-    mutationFn: async (student: Pick<STUMAIN, "USER_CODE" | "NAME">) => {
-      const { USER_CODE, NAME } = student;
-
+    mutationFn: async ({
+      USER_CODE,
+      NAME,
+      field,
+    }: Pick<STUMAIN, "USER_CODE" | "NAME"> & { field: AttendanceField }) => {
       if (!USER_CODE) {
         throw new Error("USER_CODE가 없습니다.");
       }
@@ -187,11 +191,11 @@ const StudentManagement = () => {
       );
 
       if (existing) {
-        // 기존 레코드가 있으면 PRESENT_YN 토글
-        const newPresentYn = !existing.PRESENT_YN;
+        // 기존 레코드가 있으면 선택한 필드 토글
+        const newValue = !existing[field];
         const { error } = await (supabase as any)
           .from("ATTENDANCE")
-          .update({ PRESENT_YN: newPresentYn })
+          .update({ [field]: newValue })
           .eq("USER_CODE", USER_CODE)
           .eq("DATE", attendanceDate);
         if (error) {
@@ -199,13 +203,14 @@ const StudentManagement = () => {
           throw error;
         }
       } else {
-        // 레코드가 없으면 INSERT (PRESENT_YN = true)
+        // 레코드가 없으면 INSERT (선택 필드만 true)
         const { error } = await (supabase as any).from("ATTENDANCE").insert([
           {
             USER_CODE: USER_CODE,
             NAME: NAME,
             DATE: attendanceDate,
-            PRESENT_YN: true,
+            MISSA_YN: field === "MISSA_YN",
+            DOCTRINE_YN: field === "DOCTRINE_YN",
           },
         ]);
         if (error) {
@@ -264,15 +269,17 @@ const StudentManagement = () => {
       }
 
       const total = records.length;
-      const present = records.filter((a) => a.PRESENT_YN).length;
+      const missaPresent = records.filter((a) => a.MISSA_YN).length;
+      const doctrinePresent = records.filter((a) => a.DOCTRINE_YN).length;
       const displayName = student.BAP_NAME
         ? `${student.NAME} (${student.BAP_NAME})`
         : student.NAME;
       return {
         name: displayName,
-        출석률: total > 0 ? Math.round((present / total) * 100) : 0,
-        출석: present,
-        결석: total - present,
+        미사출석률: total > 0 ? Math.round((missaPresent / total) * 100) : 0,
+        교리출석률: total > 0 ? Math.round((doctrinePresent / total) * 100) : 0,
+        미사출석: missaPresent,
+        교리출석: doctrinePresent,
       };
     });
   }, [
@@ -342,20 +349,23 @@ const StudentManagement = () => {
     }
   };
 
-  const toggleAttendance = (student: Pick<STUMAIN, "USER_CODE" | "NAME">) => {
-    toggleAttendanceMutation.mutate(student);
+  const toggleAttendance = (
+    student: Pick<STUMAIN, "USER_CODE" | "NAME">,
+    field: AttendanceField,
+  ) => {
+    toggleAttendanceMutation.mutate({ ...student, field });
   };
 
   const toggleStudentInfo = (infoKey: string) => {
     setOpenInfoUSER_CODE((prev) => (prev === infoKey ? null : infoKey));
   };
 
-  const isPresent = (USER_CODE: string) => {
-    // 해당 날짜에 출석 레코드가 있고 PRESENT_YN이 true면 출석으로 표시
+  const isPresent = (USER_CODE: string, field: AttendanceField) => {
+    // 해당 날짜에 출석 레코드가 있고 선택 필드가 true면 출석으로 표시
     const record = attendance.find(
       (a) => a.USER_CODE === USER_CODE && a.DATE === attendanceDate,
     );
-    return record ? record.PRESENT_YN : false;
+    return record ? record[field] : false;
   };
 
   // 전화번호 자동 포맷팅
@@ -597,11 +607,21 @@ const StudentManagement = () => {
                   stroke="hsl(210, 25%, 88%)"
                 />
                 <XAxis dataKey="name" fontSize={12} />
-                <YAxis fontSize={12} allowDecimals={false} />
-                <Tooltip />
+                <YAxis
+                  fontSize={12}
+                  allowDecimals={false}
+                  domain={[0, 100]}
+                  tickFormatter={(value) => `${value}%`}
+                />
+                <Tooltip formatter={(value: number) => `${value}%`} />
                 <Bar
-                  dataKey="출석"
+                  dataKey="미사출석률"
                   fill="hsl(210, 55%, 38%)"
+                  radius={[3, 3, 0, 0]}
+                />
+                <Bar
+                  dataKey="교리출석률"
+                  fill="hsl(210, 45%, 58%)"
                   radius={[3, 3, 0, 0]}
                 />
               </BarChart>
@@ -617,6 +637,17 @@ const StudentManagement = () => {
               const records = attendance
                 .filter((a) => a.USER_CODE === student.USER_CODE)
                 .sort((a, b) => a.DATE.localeCompare(b.DATE));
+              const totalRecords = records.length;
+              const missaCount = records.filter((r) => r.MISSA_YN).length;
+              const doctrineCount = records.filter((r) => r.DOCTRINE_YN).length;
+              const missaRate =
+                totalRecords > 0
+                  ? Math.round((missaCount / totalRecords) * 100)
+                  : 0;
+              const doctrineRate =
+                totalRecords > 0
+                  ? Math.round((doctrineCount / totalRecords) * 100)
+                  : 0;
               const isOpen = selectedStudent?.USER_CODE === student.USER_CODE;
               return (
                 <div
@@ -639,7 +670,7 @@ const StudentManagement = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">
-                        출석 {records.filter((r) => r.PRESENT_YN).length}
+                        미사 {missaRate}% · 교리 {doctrineRate}%
                       </span>
                       <span
                         className={`text-xs transition-transform ${isOpen ? "rotate-180" : ""}`}
@@ -656,17 +687,18 @@ const StudentManagement = () => {
                         </p>
                       ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                          {records
-                            .filter((r) => r.PRESENT_YN)
-                            .map((record) => (
-                              <div
-                                key={record.ID}
-                                className="flex items-center gap-2 px-2.5 py-1.5 rounded text-xs font-medium bg-success/10 text-success"
-                              >
-                                <span>{record.DATE}</span>
-                                <span>출석</span>
-                              </div>
-                            ))}
+                          {records.map((record) => (
+                            <div
+                              key={record.ID}
+                              className="flex items-center gap-2 px-2.5 py-1.5 rounded text-xs font-medium bg-muted text-foreground"
+                            >
+                              <span>{record.DATE}</span>
+                              <span>
+                                미사 {record.MISSA_YN ? "O" : "X"} / 교리{" "}
+                                {record.DOCTRINE_YN ? "O" : "X"}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -750,27 +782,51 @@ const StudentManagement = () => {
                     </div>
                   </div>
                   <div
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-3"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <p className="text-xs text-muted-foreground">
-                      {isPresent(student.USER_CODE) ? "출석" : "결석"}
-                    </p>
-                    <Checkbox
-                      checked={isPresent(student.USER_CODE)}
-                      onCheckedChange={() => {
-                        if (!student.USER_CODE) {
-                          alert(
-                            "학생 정보에 문제가 있습니다. USER_CODE가 없습니다.",
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs text-muted-foreground">미사</p>
+                      <Checkbox
+                        checked={isPresent(student.USER_CODE, "MISSA_YN")}
+                        onCheckedChange={() => {
+                          if (!student.USER_CODE) {
+                            alert(
+                              "학생 정보에 문제가 있습니다. USER_CODE가 없습니다.",
+                            );
+                            return;
+                          }
+                          toggleAttendance(
+                            {
+                              USER_CODE: student.USER_CODE,
+                              NAME: student.NAME,
+                            },
+                            "MISSA_YN",
                           );
-                          return;
-                        }
-                        toggleAttendance({
-                          USER_CODE: student.USER_CODE,
-                          NAME: student.NAME,
-                        });
-                      }}
-                    />
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs text-muted-foreground">교리</p>
+                      <Checkbox
+                        checked={isPresent(student.USER_CODE, "DOCTRINE_YN")}
+                        onCheckedChange={() => {
+                          if (!student.USER_CODE) {
+                            alert(
+                              "학생 정보에 문제가 있습니다. USER_CODE가 없습니다.",
+                            );
+                            return;
+                          }
+                          toggleAttendance(
+                            {
+                              USER_CODE: student.USER_CODE,
+                              NAME: student.NAME,
+                            },
+                            "DOCTRINE_YN",
+                          );
+                        }}
+                      />
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"

@@ -35,6 +35,10 @@ const Login = () => {
               교리교사 ERP 시스템 : 광야
             </p>
           </div>
+          <Label>
+            ※ 로그인할때 불편하실것 같아 소문자로 변경했습니다. ex&#41; JYC →
+            jyc
+          </Label>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
