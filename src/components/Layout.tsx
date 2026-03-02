@@ -263,8 +263,7 @@ const Layout = ({ children }: LayoutProps) => {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {getPositionLabel(user.position)} ·{" "}
-                  {getGradeLabel(user.grade)}
+                  {getPositionLabel(user.position)}
                 </p>
               </div>
             </button>

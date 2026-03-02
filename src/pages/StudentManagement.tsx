@@ -55,8 +55,9 @@ const StudentManagement = () => {
     null,
   );
   const [attendanceGradeFilter, setAttendanceGradeFilter] = useState<
-    "all" | "0" | "1" | "2" | "3"
+    "all" | "K" | "E" | "M" | "H"
   >("all");
+  const [attendanceDetailGradeFilter, setAttendanceDetailGradeFilter] = useState<string>("all");
   const [searchText, setSearchText] = useState("");
   const [attendanceDate, setAttendanceDate] = useState(
     new Date().toISOString().split("T")[0],
@@ -66,9 +67,10 @@ const StudentManagement = () => {
     new Date().toISOString().split("T")[0],
   );
   const [statsGradeFilter, setStatsGradeFilter] = useState<
-    "all" | "0" | "1" | "2" | "3"
+    "all" | "K" | "E" | "M" | "H"
   >("all");
   const [gradeCategory, setGradeCategory] = useState<string>("");
+  const [editingGradeCategory, setEditingGradeCategory] = useState<string>("");
   const [form, setForm] = useState<StudentForm>({
     NAME: "",
     BAP_NAME: "",
@@ -240,9 +242,21 @@ const StudentManagement = () => {
 
     const gradeLabelToCode: Record<string, string> = {
       유치부: "K",
-      초등부: "E1",
-      중등부: "M1",
-      고등부: "H1",
+      초등부: "E",
+      중등부: "M",
+      고등부: "H",
+      초1: "E1",
+      초2: "E2",
+      초3: "E3",
+      초4: "E4",
+      초5: "E5",
+      초6: "E6",
+      중1: "M1",
+      중2: "M2",
+      중3: "M3",
+      고1: "H1",
+      고2: "H2",
+      고3: "H3",
     };
 
     const isAdmin =
@@ -252,35 +266,58 @@ const StudentManagement = () => {
 
     const filtered = isAdmin
       ? students
-      : students.filter(
-          (s) => {
-            const userGradeCode = gradeLabelToCode[user.grade];
-            // 사용자의 학년 코드로 필터링 (코드 형식)
-            return String(s.GRADE).startsWith(userGradeCode ?? "");
+      : students.filter((s) => {
+          const studentGrade = String(s.GRADE);
+          
+          // user.grade를 배열로 변환 (쉼표로 분리되는 형식: 초2,중2 또는 E2,M2)
+          let userGradeList: string[] = [];
+          const gradeStr = String(user.grade || "");
+          
+          if (gradeStr.length > 0) {
+            userGradeList = gradeStr
+              .split(/,/)  // 쉼표로 split
+              .map(g => g.trim())  // 각 요소 양쪽 공백 제거
+              .filter(g => g.length > 0)
+              .map(g => {
+                // 한글을 코드로 변환, 이미 코드면 그대로 반환
+                return gradeLabelToCode[g] || g;
+              });
           }
-        );
+
+          // 학생의 학년이 사용자의 담당학년 중 하나와 일치하거나 부모 코드로 시작
+          return userGradeList.some((userCode) => {
+            // 정확한 일치 (예: E2 === E2)
+            if (studentGrade === userCode) return true;
+            // 부모 코드로 시작 (예: E는 E1, E2, ... 모두 포함)
+            if (userCode.length === 1 && studentGrade.startsWith(userCode)) return true;
+            return false;
+          });
+        });
 
     // 학년 순서 정의 (코드 형식)
     const gradeOrder: Record<string, number> = {
       K: 0,
-      E1: 1,
-      E2: 2,
-      E3: 3,
-      E4: 4,
-      E5: 5,
-      E6: 6,
-      M1: 7,
-      M2: 8,
-      M3: 9,
-      H1: 10,
-      H2: 11,
-      H3: 12,
+      E: 1,
+      E1: 2,
+      E2: 3,
+      E3: 4,
+      E4: 5,
+      E5: 6,
+      E6: 7,
+      M: 8,
+      M1: 9,
+      M2: 10,
+      M3: 11,
+      H: 12,
+      H1: 13,
+      H2: 14,
+      H3: 15,
     };
 
     // 학년으로 먼저 정렬, 같은 학년 내에서 이름으로 정렬
     return filtered.sort((a, b) => {
-      const gradeOrder_a = gradeOrder[a.GRADE] ?? 999;
-      const gradeOrder_b = gradeOrder[b.GRADE] ?? 999;
+      const gradeOrder_a = gradeOrder[String(a.GRADE)] ?? 999;
+      const gradeOrder_b = gradeOrder[String(b.GRADE)] ?? 999;
 
       if (gradeOrder_a !== gradeOrder_b) {
         return gradeOrder_a - gradeOrder_b;
@@ -295,37 +332,15 @@ const StudentManagement = () => {
     if (statsGradeFilter !== "all") {
       studentsForStats = filteredStudents.filter((s) => {
         const grade = String(s.GRADE);
-        // 필터 값에 따른 학년 매칭
         switch (statsGradeFilter) {
-          case "0":
-            return grade === "유치부" || grade === "0";
-          case "1":
-            return (
-              grade === "초등부" ||
-              grade === "1" ||
-              grade === "초1" ||
-              grade === "초2" ||
-              grade === "초3" ||
-              grade === "초4" ||
-              grade === "초5" ||
-              grade === "초6"
-            );
-          case "2":
-            return (
-              grade === "중등부" ||
-              grade === "2" ||
-              grade === "중1" ||
-              grade === "중2" ||
-              grade === "중3"
-            );
-          case "3":
-            return (
-              grade === "고등부" ||
-              grade === "3" ||
-              grade === "고1" ||
-              grade === "고2" ||
-              grade === "고3"
-            );
+          case "K":
+            return grade === "K";
+          case "E":
+            return grade === "E" || grade.startsWith("E");
+          case "M":
+            return grade === "M" || grade.startsWith("M");
+          case "H":
+            return grade === "H" || grade.startsWith("H");
           default:
             return true;
         }
@@ -470,6 +485,20 @@ const StudentManagement = () => {
     }
   };
 
+  const getGradeCategory = (grade: string): string => {
+    const grade_str = String(grade);
+    if (grade_str === "K") return "유치부";
+    if (["E1", "E2", "E3", "E4", "E5", "E6"].includes(grade_str)) return "초등부";
+    if (["M1", "M2", "M3"].includes(grade_str)) return "중등부";
+    if (["H1", "H2", "H3"].includes(grade_str)) return "고등부";
+    // 한글 학년이 들어온 경우
+    if (grade_str === "유치부") return "유치부";
+    if (grade_str.includes("초")) return "초등부";
+    if (grade_str.includes("중")) return "중등부";
+    if (grade_str.includes("고")) return "고등부";
+    return "";
+  };
+
   const toggleAttendance = (
     student: Pick<STU_MAIN, "USER_CODE" | "NAME">,
     field: AttendanceField,
@@ -541,41 +570,27 @@ const StudentManagement = () => {
     if (attendanceGradeFilter !== "all") {
       list = list.filter((student) => {
         const grade = String(student.GRADE);
-        // 필터 값에 따른 학년 매칭
         switch (attendanceGradeFilter) {
-          case "0":
-            return grade === "유치부" || grade === "0";
-          case "1":
-            return (
-              grade === "초등부" ||
-              grade === "1" ||
-              grade === "초1" ||
-              grade === "초2" ||
-              grade === "초3" ||
-              grade === "초4" ||
-              grade === "초5" ||
-              grade === "초6"
-            );
-          case "2":
-            return (
-              grade === "중등부" ||
-              grade === "2" ||
-              grade === "중1" ||
-              grade === "중2" ||
-              grade === "중3"
-            );
-          case "3":
-            return (
-              grade === "고등부" ||
-              grade === "3" ||
-              grade === "고1" ||
-              grade === "고2" ||
-              grade === "고3"
-            );
+          case "K":
+            return grade === "K";
+          case "E":
+            return grade.startsWith("E");
+          case "M":
+            return grade.startsWith("M");
+          case "H":
+            return grade.startsWith("H");
           default:
             return true;
         }
       });
+
+      // 세부 학년 필터 적용
+      if (attendanceDetailGradeFilter !== "all") {
+        list = list.filter((student) => {
+          const grade = String(student.GRADE);
+          return grade === attendanceDetailGradeFilter;
+        });
+      }
     }
     if (searchText.trim()) {
       const search = searchText.trim().toLowerCase();
@@ -591,7 +606,7 @@ const StudentManagement = () => {
       return nameA.localeCompare(nameB, "ko-KR");
     });
     return list;
-  }, [filteredStudents, attendanceGradeFilter, searchText]);
+  }, [filteredStudents, attendanceGradeFilter, attendanceDetailGradeFilter, searchText]);
 
   return (
     <div className="space-y-6">
@@ -794,6 +809,19 @@ const StudentManagement = () => {
                     placeholder="010-0000-0000"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <Label>메모</Label>
+                  <Input
+                    value={form.NOTE}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        NOTE: e.target.value,
+                      })
+                    }
+                    placeholder="메모"
+                  />
+                </div>
                 <Button onClick={handleAdd} className="w-full">
                   추가
                 </Button>
@@ -826,7 +854,7 @@ const StudentManagement = () => {
               <Select
                 value={statsGradeFilter}
                 onValueChange={(v) =>
-                  setStatsGradeFilter(v as "all" | "0" | "1" | "2" | "3")
+                  setStatsGradeFilter(v as "all" | "K" | "E" | "M" | "H")
                 }
               >
                 <SelectTrigger className="w-28">
@@ -834,10 +862,10 @@ const StudentManagement = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">전체</SelectItem>
-                  <SelectItem value="0">유치부</SelectItem>
-                  <SelectItem value="1">초등부</SelectItem>
-                  <SelectItem value="2">중등부</SelectItem>
-                  <SelectItem value="3">고등부</SelectItem>
+                  <SelectItem value="K">유치부</SelectItem>
+                  <SelectItem value="E">초등부</SelectItem>
+                  <SelectItem value="M">중등부</SelectItem>
+                  <SelectItem value="H">고등부</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -960,21 +988,59 @@ const StudentManagement = () => {
           <div className="flex flex-wrap items-center gap-2">
             <Select
               value={attendanceGradeFilter}
-              onValueChange={(v) =>
-                setAttendanceGradeFilter(v as "all" | "0" | "1" | "2" | "3")
-              }
+              onValueChange={(v) => {
+                setAttendanceGradeFilter(v as "all" | "K" | "E" | "M" | "H");
+                setAttendanceDetailGradeFilter("all"); // 대분류 변경 시 세부 필터 초기화
+              }}
             >
               <SelectTrigger className="w-28">
                 <SelectValue placeholder="학년" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="0">유치부</SelectItem>
-                <SelectItem value="1">초등부</SelectItem>
-                <SelectItem value="2">중등부</SelectItem>
-                <SelectItem value="3">고등부</SelectItem>
+                <SelectItem value="K">유치부</SelectItem>
+                <SelectItem value="E">초등부</SelectItem>
+                <SelectItem value="M">중등부</SelectItem>
+                <SelectItem value="H">고등부</SelectItem>
               </SelectContent>
             </Select>
+            {(attendanceGradeFilter === "E" || attendanceGradeFilter === "M" || attendanceGradeFilter === "H") && (
+              <Select
+                value={attendanceDetailGradeFilter}
+                onValueChange={(v) => setAttendanceDetailGradeFilter(v)}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="세부학년" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {attendanceGradeFilter === "E" && (
+                    <>
+                      <SelectItem value="E1">초1</SelectItem>
+                      <SelectItem value="E2">초2</SelectItem>
+                      <SelectItem value="E3">초3</SelectItem>
+                      <SelectItem value="E4">초4</SelectItem>
+                      <SelectItem value="E5">초5</SelectItem>
+                      <SelectItem value="E6">초6</SelectItem>
+                    </>
+                  )}
+                  {attendanceGradeFilter === "M" && (
+                    <>
+                      <SelectItem value="M1">중1</SelectItem>
+                      <SelectItem value="M2">중2</SelectItem>
+                      <SelectItem value="M3">중3</SelectItem>
+                    </>
+                  )}
+                  {attendanceGradeFilter === "H" && (
+                    <>
+                      <SelectItem value="H1">고1</SelectItem>
+                      <SelectItem value="H2">고2</SelectItem>
+                      <SelectItem value="H3">고3</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
             <Input
               type="text"
               placeholder="이름, 세례명 검색"
@@ -1077,7 +1143,10 @@ const StudentManagement = () => {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => setEditingStudent(student)}
+                      onClick={() => {
+                        setEditingStudent(student);
+                        setEditingGradeCategory(getGradeCategory(student.GRADE));
+                      }}
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
@@ -1166,7 +1235,12 @@ const StudentManagement = () => {
       {/* Edit Dialog */}
       <Dialog
         open={!!editingStudent}
-        onOpenChange={(open) => !open && setEditingStudent(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingStudent(null);
+            setEditingGradeCategory("");
+          }
+        }}
       >
         <DialogContent>
           <DialogHeader>
@@ -1201,31 +1275,68 @@ const StudentManagement = () => {
               <div className="space-y-1.5">
                 <Label>학년</Label>
                 <Select
-                  value={gradeToLabel(editingStudent.GRADE)}
-                  onValueChange={(v) =>
-                    setEditingStudent({ ...editingStudent, GRADE: v as Grade })
-                  }
+                  value={editingGradeCategory}
+                  onValueChange={(v) => {
+                    setEditingGradeCategory(v);
+                    if (v === "유치부") {
+                      setEditingStudent({ ...editingStudent, GRADE: "유치부" });
+                    } else {
+                      setEditingStudent({ ...editingStudent, GRADE: "" });
+                    }
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="학년 선택" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="유치부">유치부</SelectItem>
-                    <SelectItem value="초1">초1</SelectItem>
-                    <SelectItem value="초2">초2</SelectItem>
-                    <SelectItem value="초3">초3</SelectItem>
-                    <SelectItem value="초4">초4</SelectItem>
-                    <SelectItem value="초5">초5</SelectItem>
-                    <SelectItem value="초6">초6</SelectItem>
-                    <SelectItem value="중1">중1</SelectItem>
-                    <SelectItem value="중2">중2</SelectItem>
-                    <SelectItem value="중3">중3</SelectItem>
-                    <SelectItem value="고1">고1</SelectItem>
-                    <SelectItem value="고2">고2</SelectItem>
-                    <SelectItem value="고3">고3</SelectItem>
+                    {grades.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+              {editingGradeCategory && editingGradeCategory !== "유치부" && (
+                <div className="space-y-1.5">
+                  <Label>
+                    {editingGradeCategory === "초등부" && "초등학년"}
+                    {editingGradeCategory === "중등부" && "중등학년"}
+                    {editingGradeCategory === "고등부" && "고등학년"}
+                  </Label>
+                  <Select
+                    value={gradeToLabel(editingStudent.GRADE)}
+                    onValueChange={(v) =>
+                      setEditingStudent({ ...editingStudent, GRADE: v as Grade })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="세부 학년 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {editingGradeCategory === "초등부" &&
+                        ["초1", "초2", "초3", "초4", "초5", "초6"].map((g) => (
+                          <SelectItem key={g} value={g}>
+                            {g}
+                          </SelectItem>
+                        ))}
+                      {editingGradeCategory === "중등부" &&
+                        ["중1", "중2", "중3"].map((g) => (
+                          <SelectItem key={g} value={g}>
+                            {g}
+                          </SelectItem>
+                        ))}
+                      {editingGradeCategory === "고등부" &&
+                        ["고1", "고2", "고3"].map((g) => (
+                          <SelectItem key={g} value={g}>
+                            {g}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label>축일</Label>
                 <div className="flex gap-2">

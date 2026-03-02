@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { USER_MAIN, Position } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,76 +28,11 @@ import { Trash2, Save } from "lucide-react";
 
 type UserWithGrades = USER_MAIN & { MANAGE_GRADES: string[] };
 
-const gradeGroups = [
-  { label: "유치부", children: ["유치부"] },
-  { label: "초등부", children: ["초1", "초2", "초3", "초4", "초5", "초6"] },
-  { label: "중등부", children: ["중1", "중2", "중3"] },
-  { label: "고등부", children: ["고1", "고2", "고3"] },
-];
-
-// 한글 학년명을 코드로 변환 (저장용)
-const gradeToCode = (grade: string): string => {
-  const gradeMap: { [key: string]: string } = {
-    유치부: "K",
-    초1: "E1",
-    초2: "E2",
-    초3: "E3",
-    초4: "E4",
-    초5: "E5",
-    초6: "E6",
-    중1: "M1",
-    중2: "M2",
-    중3: "M3",
-    고1: "H1",
-    고2: "H2",
-    고3: "H3",
-  };
-  return gradeMap[grade] || grade;
-};
-
-// 코드를 한글 학년명으로 변환 (표시용)
-const codeToLabel = (code: string): string => {
-  const codeMap: { [key: string]: string } = {
-    K: "유치부",
-    E: "초등부",
-    E1: "초1",
-    E2: "초2",
-    E3: "초3",
-    E4: "초4",
-    E5: "초5",
-    E6: "초6",
-    M: "중등부",
-    M1: "중1",
-    M2: "중2",
-    M3: "중3",
-    H: "고등부",
-    H1: "고1",
-    H2: "고2",
-    H3: "고3",
-  };
-  if (codeMap[code]) return codeMap[code];
-  
-  // 레거시 숫자 코드 지원
-  const legacyMap: { [key: string]: string } = {
-    "0": "모든학년",
-    "1": "유치부",
-    "2": "초등부",
-    "3": "초1",
-    "4": "초2",
-    "5": "초3",
-    "6": "초4",
-    "7": "초5",
-    "8": "초6",
-    "9": "중등부",
-    "10": "중1",
-    "11": "중2",
-    "12": "중3",
-    "13": "고등부",
-    "14": "고1",
-    "15": "고2",
-    "16": "고3",
-  };
-  return legacyMap[code] || code;
+type GradeCode = {
+  CODE: string;
+  NAME: string;
+  PARENT_CODE: string;
+  LEVEL: number;
 };
 
 const TeacherManagement = () => {
@@ -105,6 +40,57 @@ const TeacherManagement = () => {
   const [editedTeachers, setEditedTeachers] = useState<
     Record<string, UserWithGrades>
   >({});
+
+  // GRADE_CODE 테이블에서 학년 정보 가져오기
+  const { data: gradeCodes = [] } = useQuery<GradeCode[], Error>({
+    queryKey: ["gradeCode"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("GRADE_CODE")
+        .select("*")
+        .order("LEVEL", { ascending: true })
+        .order("CODE", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // 코드-이름 매핑 생성
+  const gradeMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    gradeCodes.forEach((grade) => {
+      map[grade.CODE] = grade.NAME;
+    });
+    return map;
+  }, [gradeCodes]);
+
+  // 이름-코드 매핑 생성 (역방향)
+  const nameToCodeMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    gradeCodes.forEach((grade) => {
+      map[grade.NAME] = grade.CODE;
+    });
+    return map;
+  }, [gradeCodes]);
+
+  // 계층 구조로 학년 그룹 생성 (LEVEL=1이 부모, LEVEL=2가 자식)
+  const gradeGroups = useMemo(() => {
+    const parents = gradeCodes.filter((g) => g.LEVEL === 1);
+    const orderMap: Record<string, number> = { K: 0, E: 1, M: 2, H: 3 };
+    const sortedParents = parents.sort((a, b) => (orderMap[a.CODE] ?? 999) - (orderMap[b.CODE] ?? 999));
+    
+    return sortedParents.map((parent) => {
+      const children = gradeCodes
+        .filter((g) => g.LEVEL === 2 && g.PARENT_CODE === parent.CODE)
+        .map((child) => child.NAME);
+      
+      return {
+        code: parent.CODE,
+        label: parent.NAME,
+        children: children.length > 0 ? children : [parent.NAME],
+      };
+    });
+  }, [gradeCodes]);
 
   const { data: teachers = [] } = useQuery<UserWithGrades[], Error>({
     queryKey: ["usermain"],
@@ -122,12 +108,8 @@ const TeacherManagement = () => {
       return (userMainData || []).map((user: USER_MAIN) => {
         const grades = (gradeData || [])
           .filter((row: any) => row.USER_CODE === user.USER_CODE)
-          .map((row: any) => {
-            const raw = String(row.MANAGE_GRADE ?? "");
-            // 코드를 한글로 변환 (K → 유치부, E1 → 초1 등)
-            return codeToLabel(raw);
-          })
-          .filter((grade: string) => grade && grade !== "모든학년");
+          .map((row: any) => row.MANAGE_GRADE)
+          .filter((code: string) => code);
 
         return {
           ...user,
@@ -156,12 +138,38 @@ const TeacherManagement = () => {
           .eq("USER_CODE", teacher.USER_CODE);
         if (deleteGradeError) throw deleteGradeError;
 
-        const gradesToSave = teacher.MANAGE_GRADES || [];
+        let gradesToSave = teacher.MANAGE_GRADES || [];
+        
+        // 회장이면 모든 학년 코드 할당
+        if (teacher.POSITION === 1) {
+          gradesToSave = gradeCodes.map((g) => g.CODE);
+        } else {
+          // 자식이 모두 선택되면 부모 코드로 통합
+          gradeGroups.forEach((group) => {
+            const childrenCodes = group.children
+              .map((name) => nameToCodeMap[name])
+              .filter((code): code is string => !!code);
+            
+            // 자식이 2개 이상인 경우만 처리 (초등부, 중등부, 고등부 등)
+            if (childrenCodes.length > 1) {
+              const allChildrenSelected = childrenCodes.every((code) =>
+                gradesToSave.includes(code)
+              );
+              
+              if (allChildrenSelected) {
+                // 자식들 제거
+                gradesToSave = gradesToSave.filter((code) => !childrenCodes.includes(code));
+                // 부모 코드 추가
+                gradesToSave.push(group.code);
+              }
+            }
+          });
+        }
+        
         if (gradesToSave.length > 0) {
-          // 한글을 코드로 변환해서 저장 (유치부 → K, 초1 → E1 등)
-          const rows = gradesToSave.map((grade) => ({
+          const rows = gradesToSave.map((gradeCode) => ({
             USER_CODE: teacher.USER_CODE,
-            MANAGE_GRADE: gradeToCode(grade),
+            MANAGE_GRADE: gradeCode,
           }));
 
           const { error: insertGradeError } = await (supabase as any)
@@ -249,39 +257,67 @@ const TeacherManagement = () => {
     return numberMap[numValue] || "일반";
   };
 
-  const formatGradesLabel = (grades: string[]) => {
-    if (!grades || grades.length === 0) return "담당학년 선택";
-    if (grades.length <= 2) return grades.join(", ");
-    return `${grades.slice(0, 2).join(", ")} 외 ${grades.length - 2}개`;
+  const formatGradesLabel = (teacher: UserWithGrades) => {
+    const isPresident = teacher.POSITION === 1;
+    if (isPresident) return "모든 학년";
+    
+    const gradeCodes = teacher.MANAGE_GRADES || [];
+    if (!gradeCodes || gradeCodes.length === 0) return "담당학년 선택";
+    
+    const names = gradeCodes.map((code) => gradeMap[code] || code);
+    if (names.length <= 2) return names.join(", ");
+    return `${names.slice(0, 2).join(", ")} 외 ${names.length - 2}개`;
   };
 
   const toggleGrade = (
     teacher: UserWithGrades,
-    grade: string,
+    gradeName: string,
     checked: boolean,
   ) => {
     const current = getCurrentTeacher(teacher);
-    const currentGrades = current.MANAGE_GRADES || [];
+    let currentGrades = current.MANAGE_GRADES || [];
+    const gradeCode = nameToCodeMap[gradeName];
+    if (!gradeCode) return;
+
     const nextGrades = checked
-      ? Array.from(new Set([...currentGrades, grade]))
-      : currentGrades.filter((item) => item !== grade);
+      ? Array.from(new Set([...currentGrades, gradeCode]))
+      : currentGrades.filter((item) => item !== gradeCode);
 
     handleUpdateTeacher(teacher, "MANAGE_GRADES", nextGrades);
   };
 
   const toggleGroup = (
     teacher: UserWithGrades,
-    children: string[],
+    childrenNames: string[],
     checked: boolean,
   ) => {
     const current = getCurrentTeacher(teacher);
-    const currentGrades = current.MANAGE_GRADES || [];
+    let currentGrades = current.MANAGE_GRADES || [];
+    const childrenCodes = childrenNames
+      .map((name) => nameToCodeMap[name])
+      .filter((code): code is string => !!code);
 
-    const nextGrades = checked
-      ? Array.from(new Set([...currentGrades, ...children]))
-      : currentGrades.filter((item) => !children.includes(item));
+    if (checked) {
+      // 부모 체크: 모든 자식 코드 추가
+      currentGrades = Array.from(new Set([...currentGrades, ...childrenCodes]));
+    } else {
+      // 부모 언체크: 모든 자식 코드 제거
+      currentGrades = currentGrades.filter((item) => !childrenCodes.includes(item));
+    }
 
-    handleUpdateTeacher(teacher, "MANAGE_GRADES", nextGrades);
+    handleUpdateTeacher(teacher, "MANAGE_GRADES", currentGrades);
+  };
+
+  const isGroupFullySelected = (
+    teacher: UserWithGrades,
+    childrenNames: string[],
+  ): boolean => {
+    const childrenCodes = childrenNames
+      .map((name) => nameToCodeMap[name])
+      .filter((code): code is string => !!code);
+    
+    const currentGrades = teacher.MANAGE_GRADES || [];
+    return childrenCodes.length > 0 && childrenCodes.every((code) => currentGrades.includes(code));
   };
 
   const filteredTeachers = teachers
@@ -361,60 +397,64 @@ const TeacherManagement = () => {
                           <Button
                             variant="outline"
                             className="w-60 justify-start text-left font-normal"
+                            disabled={currentTeacher.POSITION === 1}
                           >
-                            {formatGradesLabel(currentTeacher.MANAGE_GRADES || [])}
+                            {formatGradesLabel(currentTeacher)}
                           </Button>
                         </PopoverTrigger>
+                        {currentTeacher.POSITION !== 1 && (
                         <PopoverContent className="w-80 p-3" align="start">
                           <div className="space-y-3">
                             {gradeGroups.map((group) => {
-                              const selectedCount = group.children.filter((grade) =>
-                                (currentTeacher.MANAGE_GRADES || []).includes(grade),
-                              ).length;
-                              const allSelected = selectedCount === group.children.length;
+                              const childrenNames = group.children;
+                              const isFullySelected = isGroupFullySelected(currentTeacher, childrenNames);
 
                               return (
-                                <div key={group.label} className="space-y-2">
-                                  <label className="flex items-center gap-2">
+                                <div key={group.code} className="space-y-2">
+                                  <label className="flex items-center gap-2 cursor-pointer">
                                     <Checkbox
-                                      checked={allSelected}
+                                      checked={isFullySelected}
                                       onCheckedChange={(checked) =>
                                         toggleGroup(
                                           currentTeacher,
-                                          group.children,
+                                          childrenNames,
                                           Boolean(checked),
                                         )
                                       }
                                     />
-                                    <span className="text-sm font-medium">{group.label}</span>
+                                    <span className="text-sm font-semibold text-primary">{group.label}</span>
                                   </label>
                                   <div className="grid grid-cols-3 gap-2 pl-6">
-                                    {group.children.map((grade) => (
-                                      <label
-                                        key={grade}
-                                        className="flex items-center gap-1.5 text-sm"
-                                      >
-                                        <Checkbox
-                                          checked={(currentTeacher.MANAGE_GRADES || []).includes(
-                                            grade,
-                                          )}
-                                          onCheckedChange={(checked) =>
-                                            toggleGrade(
-                                              currentTeacher,
-                                              grade,
-                                              Boolean(checked),
-                                            )
-                                          }
-                                        />
-                                        <span>{grade}</span>
-                                      </label>
-                                    ))}
+                                    {group.children.map((gradeName) => {
+                                      const gradeCode = nameToCodeMap[gradeName];
+                                      const isChecked = (currentTeacher.MANAGE_GRADES || []).includes(gradeCode);
+                                      
+                                      return (
+                                        <label
+                                          key={gradeName}
+                                          className="flex items-center gap-1.5 text-sm cursor-pointer hover:text-primary transition-colors"
+                                        >
+                                          <Checkbox
+                                            checked={isChecked}
+                                            onCheckedChange={(checked) =>
+                                              toggleGrade(
+                                                currentTeacher,
+                                                gradeName,
+                                                Boolean(checked),
+                                              )
+                                            }
+                                          />
+                                          <span>{gradeName}</span>
+                                        </label>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               );
                             })}
                           </div>
                         </PopoverContent>
+                        )}
                       </Popover>
                     </TableCell>
                     <TableCell className="text-right">

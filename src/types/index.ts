@@ -95,7 +95,7 @@ export interface NOTIFICATION {
 //담당학년 정보
 export interface USER_MANAGE_GRADE {
   USER_CODE: string;
-  MANAGE_GRADE: number;
+  MANAGE_GRADE: string;
 }
 
 //CODE

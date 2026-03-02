@@ -68,11 +68,11 @@ const mapUserMainToUser = (
     positionValue === "0" || userMain.POSITION === 1 || userMain.POSITION === 2;
   const role = isAdmin ? "admin" : "teacher";
 
-  // 관리자는 "모든학년", 교사는 첫 번째 학년 또는 모든학년 표시
+  // 관리자는 "모든학년", 교사는 담당하는 모든 학년을 쉼표로 연결
   let grade = "모든학년";
   if (!isAdmin && manageGrades && manageGrades.length > 0) {
-    // 다중 학년 중 첫 번째 학년 사용
-    grade = manageGrades[0];
+    // 다중 학년을 쉼표로 연결 (예: "초2,중2")
+    grade = manageGrades.join(",");
   }
 
   return {
