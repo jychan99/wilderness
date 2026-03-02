@@ -70,7 +70,7 @@ const Layout = ({ children }: LayoutProps) => {
     }
 
     const { error } = await (supabase as any)
-      .from("USERMAIN")
+      .from("USER_MAIN")
       .update(payload)
       .eq("ID", user.id);
     if (error) {

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { STUMAIN, ATTENDANCE, Grade } from "@/types";
+import { STU_MAIN, ATTENDANCE, Grade } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 
 // helper types mapping to form
@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Pencil, Trash2, BarChart3 } from "lucide-react";
+import { Plus, Pencil, Trash2, BarChart3, Save } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -49,8 +49,8 @@ const StudentManagement = () => {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<STUMAIN | null>(null);
-  const [editingStudent, setEditingStudent] = useState<STUMAIN | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<STU_MAIN | null>(null);
+  const [editingStudent, setEditingStudent] = useState<STU_MAIN | null>(null);
   const [openInfoUSER_CODE, setOpenInfoUSER_CODE] = useState<string | null>(
     null,
   );
@@ -68,6 +68,7 @@ const StudentManagement = () => {
   const [statsGradeFilter, setStatsGradeFilter] = useState<
     "all" | "0" | "1" | "2" | "3"
   >("all");
+  const [gradeCategory, setGradeCategory] = useState<string>("");
   const [form, setForm] = useState<StudentForm>({
     NAME: "",
     BAP_NAME: "",
@@ -77,12 +78,16 @@ const StudentManagement = () => {
     FAMILY_CONTACT: "",
     NOTE: "",
   });
+  // 출석 체크 임시 저장소 (저장 버튼 누르기 전까지)
+  const [pendingAttendance, setPendingAttendance] = useState<
+    Record<string, { MISSA_YN: boolean; DOCTRINE_YN: boolean }>
+  >({});
 
-  // 학생 조회 (STUMAIN 테이블)
-  const { data: students = [] } = useQuery<STUMAIN[], Error>({
+  // 학생 조회 (STU_MAIN 테이블)
+  const { data: students = [] } = useQuery<STU_MAIN[], Error>({
     queryKey: ["stumain"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("STUMAIN").select("*");
+      const { data, error } = await supabase.from("STU_MAIN").select("*");
       if (error) throw error;
       return data || [];
     },
@@ -100,9 +105,9 @@ const StudentManagement = () => {
 
   // 학생 추가
   const addStudentMutation = useMutation({
-    mutationFn: async (newStudent: STUMAIN) => {
+    mutationFn: async (newStudent: STU_MAIN) => {
       const { error } = await (supabase as any)
-        .from("STUMAIN")
+        .from("STU_MAIN")
         .insert([newStudent]);
       if (error) {
         console.error("학생 추가 에러:", error);
@@ -120,6 +125,7 @@ const StudentManagement = () => {
         FAMILY_CONTACT: "",
         NOTE: "",
       });
+      setGradeCategory("");
       setShowAdd(false);
     },
     onError: (error: any) => {
@@ -129,9 +135,9 @@ const StudentManagement = () => {
 
   // 학생 수정
   const editStudentMutation = useMutation({
-    mutationFn: async (updatedStudent: STUMAIN) => {
+    mutationFn: async (updatedStudent: STU_MAIN) => {
       const { error } = await (supabase as any)
-        .from("STUMAIN")
+        .from("STU_MAIN")
         .update(updatedStudent)
         .eq("USER_CODE", updatedStudent.USER_CODE);
       if (error) throw error;
@@ -155,7 +161,7 @@ const StudentManagement = () => {
       }
 
       const { error: studentError } = await supabase
-        .from("STUMAIN")
+        .from("STU_MAIN")
         .delete()
         .eq("USER_CODE", USER_CODE);
 
@@ -175,55 +181,57 @@ const StudentManagement = () => {
 
   type AttendanceField = "MISSA_YN" | "DOCTRINE_YN";
 
-  // 출석 토글
-  const toggleAttendanceMutation = useMutation({
-    mutationFn: async ({
-      USER_CODE,
-      NAME,
-      field,
-    }: Pick<STUMAIN, "USER_CODE" | "NAME"> & { field: AttendanceField }) => {
-      if (!USER_CODE) {
-        throw new Error("USER_CODE가 없습니다.");
-      }
-
-      const existing = attendance.find(
-        (a) => a.USER_CODE === USER_CODE && a.DATE === attendanceDate,
+  // 출석 일괄 저장
+  const saveAttendanceMutation = useMutation({
+    mutationFn: async () => {
+      const updates = Object.entries(pendingAttendance).map(
+        ([USER_CODE, values]) => ({
+          USER_CODE,
+          ...values,
+        }),
       );
 
-      if (existing) {
-        // 기존 레코드가 있으면 선택한 필드 토글
-        const newValue = !existing[field];
-        const { error } = await (supabase as any)
-          .from("ATTENDANCE")
-          .update({ [field]: newValue })
-          .eq("USER_CODE", USER_CODE)
-          .eq("DATE", attendanceDate);
-        if (error) {
-          console.error("출석 업데이트 에러:", error);
-          throw error;
-        }
-      } else {
-        // 레코드가 없으면 INSERT (선택 필드만 true)
-        const { error } = await (supabase as any).from("ATTENDANCE").insert([
-          {
-            USER_CODE: USER_CODE,
-            NAME: NAME,
-            DATE: attendanceDate,
-            MISSA_YN: field === "MISSA_YN",
-            DOCTRINE_YN: field === "DOCTRINE_YN",
-          },
-        ]);
-        if (error) {
-          console.error("출석 추가 에러:", error);
-          throw error;
+      for (const update of updates) {
+        const student = students.find((s) => s.USER_CODE === update.USER_CODE);
+        if (!student) continue;
+
+        const existing = attendance.find(
+          (a) => a.USER_CODE === update.USER_CODE && a.DATE === attendanceDate,
+        );
+
+        if (existing) {
+          // 기존 레코드 업데이트
+          const { error } = await (supabase as any)
+            .from("ATTENDANCE")
+            .update({
+              MISSA_YN: update.MISSA_YN,
+              DOCTRINE_YN: update.DOCTRINE_YN,
+            })
+            .eq("USER_CODE", update.USER_CODE)
+            .eq("DATE", attendanceDate);
+          if (error) throw error;
+        } else {
+          // 새 레코드 생성
+          const { error } = await (supabase as any).from("ATTENDANCE").insert([
+            {
+              USER_CODE: update.USER_CODE,
+              NAME: student.NAME,
+              DATE: attendanceDate,
+              MISSA_YN: update.MISSA_YN,
+              DOCTRINE_YN: update.DOCTRINE_YN,
+            },
+          ]);
+          if (error) throw error;
         }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      setPendingAttendance({});
     },
     onError: (error: any) => {
-      console.error("출석 토글 실패:", error);
+      console.error("출석 저장 실패:", error);
+      alert("출석 저장 중 오류가 발생했습니다.");
     },
   });
 
@@ -231,10 +239,10 @@ const StudentManagement = () => {
     if (!user) return [];
 
     const gradeLabelToCode: Record<string, string> = {
-      유치부: "0",
-      초등부: "1",
-      중등부: "2",
-      고등부: "3",
+      유치부: "K",
+      초등부: "E1",
+      중등부: "M1",
+      고등부: "H1",
     };
 
     const isAdmin =
@@ -242,20 +250,86 @@ const StudentManagement = () => {
       user.role === "admin" ||
       user.grade === "모든학년";
 
-    return isAdmin
+    const filtered = isAdmin
       ? students
       : students.filter(
-          (s) => String(s.GRADE) === (gradeLabelToCode[user.grade] ?? ""),
+          (s) => {
+            const userGradeCode = gradeLabelToCode[user.grade];
+            // 사용자의 학년 코드로 필터링 (코드 형식)
+            return String(s.GRADE).startsWith(userGradeCode ?? "");
+          }
         );
+
+    // 학년 순서 정의 (코드 형식)
+    const gradeOrder: Record<string, number> = {
+      K: 0,
+      E1: 1,
+      E2: 2,
+      E3: 3,
+      E4: 4,
+      E5: 5,
+      E6: 6,
+      M1: 7,
+      M2: 8,
+      M3: 9,
+      H1: 10,
+      H2: 11,
+      H3: 12,
+    };
+
+    // 학년으로 먼저 정렬, 같은 학년 내에서 이름으로 정렬
+    return filtered.sort((a, b) => {
+      const gradeOrder_a = gradeOrder[a.GRADE] ?? 999;
+      const gradeOrder_b = gradeOrder[b.GRADE] ?? 999;
+
+      if (gradeOrder_a !== gradeOrder_b) {
+        return gradeOrder_a - gradeOrder_b;
+      }
+      return a.NAME.localeCompare(b.NAME, "ko");
+    });
   }, [user, students]);
 
   const attendanceStats = useMemo(() => {
     // 학년 필터 적용
     let studentsForStats = filteredStudents;
     if (statsGradeFilter !== "all") {
-      studentsForStats = filteredStudents.filter(
-        (s) => String(s.GRADE) === statsGradeFilter,
-      );
+      studentsForStats = filteredStudents.filter((s) => {
+        const grade = String(s.GRADE);
+        // 필터 값에 따른 학년 매칭
+        switch (statsGradeFilter) {
+          case "0":
+            return grade === "유치부" || grade === "0";
+          case "1":
+            return (
+              grade === "초등부" ||
+              grade === "1" ||
+              grade === "초1" ||
+              grade === "초2" ||
+              grade === "초3" ||
+              grade === "초4" ||
+              grade === "초5" ||
+              grade === "초6"
+            );
+          case "2":
+            return (
+              grade === "중등부" ||
+              grade === "2" ||
+              grade === "중1" ||
+              grade === "중2" ||
+              grade === "중3"
+            );
+          case "3":
+            return (
+              grade === "고등부" ||
+              grade === "3" ||
+              grade === "고1" ||
+              grade === "고2" ||
+              grade === "고3"
+            );
+          default:
+            return true;
+        }
+      });
     }
 
     return studentsForStats.map((student) => {
@@ -294,28 +368,70 @@ const StudentManagement = () => {
 
   const grades: Grade[] = ["유치부", "초등부", "중등부", "고등부"];
 
-  // 학년을 숫자 코드로 변환
-  const gradeToCode = (grade: string): number => {
-    const gradeMap: { [key: string]: number } = {
-      유치부: 0,
-      초등부: 1,
-      중등부: 2,
-      고등부: 3,
+  // 학년을 문자열로 저장 (그대로 저장)
+  const gradeToCode = (grade: string): string => {
+    // 한글 학년명을 코드로 변환
+    // K: 유치부, E1-E6: 초1-초6, M1-M3: 중1-중3, H1-H3: 고1-고3
+    const gradeMap: { [key: string]: string } = {
+      유치부: "K",
+      초1: "E1",
+      초2: "E2",
+      초3: "E3",
+      초4: "E4",
+      초5: "E5",
+      초6: "E6",
+      중1: "M1",
+      중2: "M2",
+      중3: "M3",
+      고1: "H1",
+      고2: "H2",
+      고3: "H3",
     };
-    return gradeMap[grade] || 0;
+    return gradeMap[grade] || grade;
   };
 
   const gradeToLabel = (grade: string | number): string => {
-    const gradeMap: { [key: string]: string } = {
+    const gradeStr = String(grade);
+    // 코드 형식인 경우 한글로 변환
+    const codeMap: { [key: string]: string } = {
+      K: "유치부",
+      E1: "초1",
+      E2: "초2",
+      E3: "초3",
+      E4: "초4",
+      E5: "초5",
+      E6: "초6",
+      M1: "중1",
+      M2: "중2",
+      M3: "중3",
+      H1: "고1",
+      H2: "고2",
+      H3: "고3",
+    };
+    // 코드가 있으면 변환
+    if (codeMap[gradeStr]) {
+      return codeMap[gradeStr];
+    }
+    // 이미 한글 학년이면 그대로 반환 (레거시 데이터)
+    if (
+      gradeStr === "유치부" ||
+      gradeStr.includes("초") ||
+      gradeStr.includes("중") ||
+      gradeStr.includes("고")
+    ) {
+      return gradeStr;
+    }
+    // 숫자 코드인 경우 (구식 포맷)
+    const legacyMap: { [key: string]: string } = {
       "0": "유치부",
       "1": "초등부",
       "2": "중등부",
       "3": "고등부",
     };
-    return gradeMap[String(grade)] || String(grade);
+    return legacyMap[gradeStr] || gradeStr;
   };
 
-  const getStudentInfoKey = (student: STUMAIN): string => {
+  const getStudentInfoKey = (student: STU_MAIN): string => {
     return (
       student.USER_CODE ||
       `${student.NAME}-${student.BAP_NAME}-${student.CONTACT}`
@@ -329,7 +445,7 @@ const StudentManagement = () => {
     const newStudent = {
       NAME: form.NAME,
       BAP_NAME: form.BAP_NAME || "",
-      GRADE: gradeToCode(form.GRADE), // 문자열 → 숫자로 변환
+      GRADE: gradeToCode(form.GRADE), // 한글을 코드로 변환해서 저장 (K, E1, E5, M1, H3 등)
       NAME_DAY: form.NAME_DAY || "", // MM-DD 형식
       CONTACT: form.CONTACT || "",
       FAMILY_CONTACT: form.FAMILY_CONTACT || "",
@@ -340,7 +456,12 @@ const StudentManagement = () => {
 
   const handleEdit = () => {
     if (!editingStudent) return;
-    editStudentMutation.mutate(editingStudent);
+    // GRADE를 한글에서 코드로 변환
+    const updatedStudent = {
+      ...editingStudent,
+      GRADE: gradeToCode(editingStudent.GRADE),
+    };
+    editStudentMutation.mutate(updatedStudent);
   };
 
   const handleDelete = (id: string) => {
@@ -350,10 +471,40 @@ const StudentManagement = () => {
   };
 
   const toggleAttendance = (
-    student: Pick<STUMAIN, "USER_CODE" | "NAME">,
+    student: Pick<STU_MAIN, "USER_CODE" | "NAME">,
     field: AttendanceField,
   ) => {
-    toggleAttendanceMutation.mutate({ ...student, field });
+    if (!student.USER_CODE) return;
+
+    const currentState = getCurrentAttendanceState(student.USER_CODE);
+    const newState = {
+      ...currentState,
+      [field]: !currentState[field],
+    };
+
+    setPendingAttendance((prev) => ({
+      ...prev,
+      [student.USER_CODE]: newState,
+    }));
+  };
+
+  const getCurrentAttendanceState = (
+    USER_CODE: string,
+  ): { MISSA_YN: boolean; DOCTRINE_YN: boolean } => {
+    // pendingAttendance에 있으면 그걸 사용
+    if (pendingAttendance[USER_CODE]) {
+      return pendingAttendance[USER_CODE];
+    }
+
+    // 없으면 실제 출석 데이터에서 가져오기
+    const record = attendance.find(
+      (a) => a.USER_CODE === USER_CODE && a.DATE === attendanceDate,
+    );
+
+    return {
+      MISSA_YN: record?.MISSA_YN ?? false,
+      DOCTRINE_YN: record?.DOCTRINE_YN ?? false,
+    };
   };
 
   const toggleStudentInfo = (infoKey: string) => {
@@ -361,7 +512,12 @@ const StudentManagement = () => {
   };
 
   const isPresent = (USER_CODE: string, field: AttendanceField) => {
-    // 해당 날짜에 출석 레코드가 있고 선택 필드가 true면 출석으로 표시
+    // pendingAttendance 먼저 확인
+    if (pendingAttendance[USER_CODE]) {
+      return pendingAttendance[USER_CODE][field];
+    }
+
+    // 실제 출석 데이터 확인
     const record = attendance.find(
       (a) => a.USER_CODE === USER_CODE && a.DATE === attendanceDate,
     );
@@ -383,9 +539,43 @@ const StudentManagement = () => {
   const attendanceList = useMemo(() => {
     let list = [...filteredStudents];
     if (attendanceGradeFilter !== "all") {
-      list = list.filter(
-        (student) => String(student.GRADE) === attendanceGradeFilter,
-      );
+      list = list.filter((student) => {
+        const grade = String(student.GRADE);
+        // 필터 값에 따른 학년 매칭
+        switch (attendanceGradeFilter) {
+          case "0":
+            return grade === "유치부" || grade === "0";
+          case "1":
+            return (
+              grade === "초등부" ||
+              grade === "1" ||
+              grade === "초1" ||
+              grade === "초2" ||
+              grade === "초3" ||
+              grade === "초4" ||
+              grade === "초5" ||
+              grade === "초6"
+            );
+          case "2":
+            return (
+              grade === "중등부" ||
+              grade === "2" ||
+              grade === "중1" ||
+              grade === "중2" ||
+              grade === "중3"
+            );
+          case "3":
+            return (
+              grade === "고등부" ||
+              grade === "3" ||
+              grade === "고1" ||
+              grade === "고2" ||
+              grade === "고3"
+            );
+          default:
+            return true;
+        }
+      });
     }
     if (searchText.trim()) {
       const search = searchText.trim().toLowerCase();
@@ -422,7 +612,15 @@ const StudentManagement = () => {
             <BarChart3 className="w-4 h-4 mr-1.5" />
             통계
           </Button>
-          <Dialog open={showAdd} onOpenChange={setShowAdd}>
+          <Dialog
+            open={showAdd}
+            onOpenChange={(open) => {
+              setShowAdd(open);
+              if (!open) {
+                setGradeCategory("");
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="w-4 h-4 mr-1.5" />
@@ -455,10 +653,16 @@ const StudentManagement = () => {
                 <div className="space-y-1.5">
                   <Label>학년</Label>
                   <Select
-                    value={form.GRADE}
-                    onValueChange={(v) =>
-                      setForm({ ...form, GRADE: v as Grade })
-                    }
+                    value={gradeCategory}
+                    onValueChange={(v) => {
+                      setGradeCategory(v);
+                      // 유치부는 바로 설정, 나머지는 초기화
+                      if (v === "유치부") {
+                        setForm({ ...form, GRADE: "유치부" });
+                      } else {
+                        setForm({ ...form, GRADE: "" });
+                      }
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="학년 선택" />
@@ -472,6 +676,45 @@ const StudentManagement = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                {gradeCategory && gradeCategory !== "유치부" && (
+                  <div className="space-y-1.5">
+                    <Label>
+                      {gradeCategory === "초등부" && "초등학년"}
+                      {gradeCategory === "중등부" && "중등학년"}
+                      {gradeCategory === "고등부" && "고등학년"}
+                    </Label>
+                    <Select
+                      value={form.GRADE}
+                      onValueChange={(v) =>
+                        setForm({ ...form, GRADE: v as Grade })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="세부 학년 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gradeCategory === "초등부" &&
+                          ["초1", "초2", "초3", "초4", "초5", "초6"].map((g) => (
+                            <SelectItem key={g} value={g}>
+                              {g}
+                            </SelectItem>
+                          ))}
+                        {gradeCategory === "중등부" &&
+                          ["중1", "중2", "중3"].map((g) => (
+                            <SelectItem key={g} value={g}>
+                              {g}
+                            </SelectItem>
+                          ))}
+                        {gradeCategory === "고등부" &&
+                          ["고1", "고2", "고3"].map((g) => (
+                            <SelectItem key={g} value={g}>
+                              {g}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label>축일</Label>
                   <div className="flex gap-2">
@@ -742,7 +985,10 @@ const StudentManagement = () => {
             <Input
               type="date"
               value={attendanceDate}
-              onChange={(e) => setAttendanceDate(e.target.value)}
+              onChange={(e) => {
+                setAttendanceDate(e.target.value);
+                setPendingAttendance({}); // 날짜 변경시 임시 저장 초기화
+              }}
               className="w-full sm:w-44"
             />
           </div>
@@ -901,6 +1147,20 @@ const StudentManagement = () => {
             );
           })}
         </div>
+
+        <div className="pt-4 border-t border-border mt-4">
+          <Button
+            onClick={() => saveAttendanceMutation.mutate()}
+            disabled={
+              Object.keys(pendingAttendance).length === 0 ||
+              saveAttendanceMutation.isPending
+            }
+            className="w-full gap-2"
+          >
+            <Save className="w-4 h-4" />
+            {saveAttendanceMutation.isPending ? "저장 중..." : "저장"}
+          </Button>
+        </div>
       </div>
 
       {/* Edit Dialog */}
@@ -941,7 +1201,7 @@ const StudentManagement = () => {
               <div className="space-y-1.5">
                 <Label>학년</Label>
                 <Select
-                  value={editingStudent.GRADE}
+                  value={gradeToLabel(editingStudent.GRADE)}
                   onValueChange={(v) =>
                     setEditingStudent({ ...editingStudent, GRADE: v as Grade })
                   }
@@ -950,11 +1210,19 @@ const StudentManagement = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {grades.map((g) => (
-                      <SelectItem key={g} value={g}>
-                        {g}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="유치부">유치부</SelectItem>
+                    <SelectItem value="초1">초1</SelectItem>
+                    <SelectItem value="초2">초2</SelectItem>
+                    <SelectItem value="초3">초3</SelectItem>
+                    <SelectItem value="초4">초4</SelectItem>
+                    <SelectItem value="초5">초5</SelectItem>
+                    <SelectItem value="초6">초6</SelectItem>
+                    <SelectItem value="중1">중1</SelectItem>
+                    <SelectItem value="중2">중2</SelectItem>
+                    <SelectItem value="중3">중3</SelectItem>
+                    <SelectItem value="고1">고1</SelectItem>
+                    <SelectItem value="고2">고2</SelectItem>
+                    <SelectItem value="고3">고3</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

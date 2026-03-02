@@ -57,7 +57,7 @@ export type Database = {
           DATE?: string;
         };
       };
-      STUMAIN: {
+      STU_MAIN: {
         Row: {
           USER_CODE: string;
           NAME: string;
@@ -170,7 +170,7 @@ export type Database = {
           CREATED_AT?: string;
         };
       };
-      USERMAIN: {
+      USER_MAIN: {
         Row: {
           USER_CODE: string;
           ID: string;
@@ -178,7 +178,6 @@ export type Database = {
           BAP_NAME: string;
           PASSWORD: string;
           POSITION: string;
-          MANAGE_GRADE: string;
         };
         Insert: {
           USER_CODE: string;
@@ -187,7 +186,6 @@ export type Database = {
           BAP_NAME: string;
           PASSWORD: string;
           POSITION: string;
-          MANAGE_GRADE: string;
         };
         Update: {
           USER_CODE?: string;
@@ -196,7 +194,40 @@ export type Database = {
           BAP_NAME?: string;
           PASSWORD?: string;
           POSITION?: string;
+        };
+      };
+      USER_MANAGE_GRADE: {
+        Row: {
+          USER_CODE: string;
+          MANAGE_GRADE: string;
+        };
+        Insert: {
+          USER_CODE: string;
+          MANAGE_GRADE: string;
+        };
+        Update: {
+          USER_CODE?: string;
           MANAGE_GRADE?: string;
+        };
+      };
+      GRADE_CODE: {
+        Row: {
+          CODE: string;
+          NAME: string;
+          PARENT_CODE: string;
+          LEVEL: number;
+        };
+        Insert: {
+          CODE: string;
+          NAME: string;
+          PARENT_CODE: string;
+          LEVEL: number;
+        };
+        Update: {
+          CODE?: string;
+          NAME?: string;
+          PARENT_CODE?: string;
+          LEVEL?: number;
         };
       };
     };

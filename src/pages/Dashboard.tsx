@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SCHEDULE, MEETING, NOTIFICATION, STUMAIN } from "@/types";
+import { SCHEDULE, MEETING, NOTIFICATION, STU_MAIN } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ChevronLeft,
@@ -71,10 +71,10 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
   });
 
   // 학생 축일 조회
-  const { data: students = [] } = useQuery<STUMAIN[], Error>({
+  const { data: students = [] } = useQuery<STU_MAIN[], Error>({
     queryKey: ["students"],
-    queryFn: async (): Promise<STUMAIN[]> => {
-      const { data, error } = await supabase.from("STUMAIN").select("*");
+    queryFn: async (): Promise<STU_MAIN[]> => {
+      const { data, error } = await supabase.from("STU_MAIN").select("*");
       if (error) throw error;
       return data || [];
     },

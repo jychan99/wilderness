@@ -9,7 +9,7 @@ export type Position =
   | "일반"
   | "";
 
-export type Grade = "모든학년" | "유치부" | "초등부" | "중등부" | "고등부";
+export type Grade = "모든학년" | "유치부" | "초등부" | "초1" | "초2" | "초3" | "초4" | "초5" | "초6" | "중등부" | "중1" | "중2" | "중3" | "고등부" | "고1" | "고2" | "고3" | "";
 
 //사용자(로그인)
 export interface User {
@@ -23,18 +23,17 @@ export interface User {
 }
 
 //사용자 메인
-export interface USERMAIN {
+export interface USER_MAIN {
   USER_CODE: string;
   ID: string;
   NAME: string;
   BAP_NAME: string; // 세례명
   PASSWORD: string;
   POSITION: number;
-  MANAGE_GRADE: number;
 }
 
 //학생메인
-export interface STUMAIN {
+export interface STU_MAIN {
   USER_CODE: string;
   NAME: string;
   BAP_NAME: string; // 세례명
@@ -91,4 +90,20 @@ export interface NOTIFICATION {
   AUTHOR: string;
   POSITION: string;
   CREATED_AT: string;
+}
+
+//담당학년 정보
+export interface USER_MANAGE_GRADE {
+  USER_CODE: string;
+  MANAGE_GRADE: number;
+}
+
+//CODE
+
+//학년코드
+export interface GRADECODE {
+  CODE: string;
+  NAME: string;
+  PARENT_CODE: string;
+  LEVEL: number;
 }
