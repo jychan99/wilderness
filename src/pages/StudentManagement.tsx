@@ -930,7 +930,10 @@ const StudentManagement = () => {
                     className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors text-left"
                   >
                     <div>
-                      <span className="font-medium text-sm">
+                      <span className="text-sm font-semibold text-muted-foreground min-w-[52px]">
+                        {gradeToLabel(student.GRADE)}
+                      </span>
+                      <span className="font-medium text-sm ml-1.5">
                         {student.NAME}
                       </span>
                       {student.BAP_NAME && (

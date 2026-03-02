@@ -264,9 +264,22 @@ const TeacherManagement = () => {
     const gradeCodes = teacher.MANAGE_GRADES || [];
     if (!gradeCodes || gradeCodes.length === 0) return "담당학년 선택";
     
-    const names = gradeCodes.map((code) => gradeMap[code] || code);
-    if (names.length <= 2) return names.join(", ");
-    return `${names.slice(0, 2).join(", ")} 외 ${names.length - 2}개`;
+    // 부모 코드를 자식 이름들로 확장
+    const expandedNames: string[] = [];
+    gradeCodes.forEach((code) => {
+      const parentGroup = gradeGroups.find((g) => g.code === code);
+      if (parentGroup && parentGroup.children.length > 1) {
+        // 부모 코드면 자식들의 이름을 추가
+        expandedNames.push(...parentGroup.children);
+      } else {
+        // 자식 코드면 해당 이름 추가
+        expandedNames.push(gradeMap[code] || code);
+      }
+    });
+    
+    const uniqueNames = Array.from(new Set(expandedNames));
+    if (uniqueNames.length <= 2) return uniqueNames.join(", ");
+    return `${uniqueNames.slice(0, 2).join(", ")} 외 ${uniqueNames.length - 2}개`;
   };
 
   const toggleGrade = (
@@ -311,12 +324,19 @@ const TeacherManagement = () => {
   const isGroupFullySelected = (
     teacher: UserWithGrades,
     childrenNames: string[],
+    groupCode: string,
   ): boolean => {
+    const currentGrades = teacher.MANAGE_GRADES || [];
+    
+    // 부모 코드가 있으면 모두 선택된 것으로 간주
+    if (currentGrades.includes(groupCode)) {
+      return true;
+    }
+    
     const childrenCodes = childrenNames
       .map((name) => nameToCodeMap[name])
       .filter((code): code is string => !!code);
     
-    const currentGrades = teacher.MANAGE_GRADES || [];
     return childrenCodes.length > 0 && childrenCodes.every((code) => currentGrades.includes(code));
   };
 
@@ -407,7 +427,7 @@ const TeacherManagement = () => {
                           <div className="space-y-3">
                             {gradeGroups.map((group) => {
                               const childrenNames = group.children;
-                              const isFullySelected = isGroupFullySelected(currentTeacher, childrenNames);
+                              const isFullySelected = isGroupFullySelected(currentTeacher, childrenNames, group.code);
 
                               return (
                                 <div key={group.code} className="space-y-2">
@@ -427,7 +447,9 @@ const TeacherManagement = () => {
                                   <div className="grid grid-cols-3 gap-2 pl-6">
                                     {group.children.map((gradeName) => {
                                       const gradeCode = nameToCodeMap[gradeName];
-                                      const isChecked = (currentTeacher.MANAGE_GRADES || []).includes(gradeCode);
+                                      const currentGrades = currentTeacher.MANAGE_GRADES || [];
+                                      // 자식 코드가 있거나, 부모 코드가 있으면 체크된 것으로 표시
+                                      const isChecked = currentGrades.includes(gradeCode) || currentGrades.includes(group.code);
                                       
                                       return (
                                         <label
