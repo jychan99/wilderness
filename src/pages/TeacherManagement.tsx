@@ -292,16 +292,37 @@ const TeacherManagement = () => {
     const gradeCode = nameToCodeMap[gradeName];
     if (!gradeCode) return;
 
-    const nextGrades = checked
-      ? Array.from(new Set([...currentGrades, gradeCode]))
-      : currentGrades.filter((item) => item !== gradeCode);
+    // 해당 자식이 속한 그룹 찾기
+    const parentGroup = gradeGroups.find((g) => g.children.includes(gradeName));
 
-    handleUpdateTeacher(teacher, "MANAGE_GRADES", nextGrades);
+    if (checked) {
+      // 체크: 자식 코드 추가
+      currentGrades = Array.from(new Set([...currentGrades, gradeCode]));
+    } else {
+      // 해제: 부모 코드가 있는 경우 처리
+      if (parentGroup && currentGrades.includes(parentGroup.code)) {
+        // 부모 코드 제거
+        currentGrades = currentGrades.filter((item) => item !== parentGroup.code);
+        
+        // 해제하려는 자식을 제외한 나머지 자식들 추가
+        const childrenCodes = parentGroup.children
+          .map((name) => nameToCodeMap[name])
+          .filter((code): code is string => !!code && code !== gradeCode);
+        
+        currentGrades = Array.from(new Set([...currentGrades, ...childrenCodes]));
+      } else {
+        // 부모 코드가 없으면 단순히 자식 코드만 제거
+        currentGrades = currentGrades.filter((item) => item !== gradeCode);
+      }
+    }
+
+    handleUpdateTeacher(teacher, "MANAGE_GRADES", currentGrades);
   };
 
   const toggleGroup = (
     teacher: UserWithGrades,
     childrenNames: string[],
+    groupCode: string,
     checked: boolean,
   ) => {
     const current = getCurrentTeacher(teacher);
@@ -314,8 +335,8 @@ const TeacherManagement = () => {
       // 부모 체크: 모든 자식 코드 추가
       currentGrades = Array.from(new Set([...currentGrades, ...childrenCodes]));
     } else {
-      // 부모 언체크: 모든 자식 코드 제거
-      currentGrades = currentGrades.filter((item) => !childrenCodes.includes(item));
+      // 부모 언체크: 부모 코드와 모든 자식 코드 제거
+      currentGrades = currentGrades.filter((item) => item !== groupCode && !childrenCodes.includes(item));
     }
 
     handleUpdateTeacher(teacher, "MANAGE_GRADES", currentGrades);
@@ -438,6 +459,7 @@ const TeacherManagement = () => {
                                         toggleGroup(
                                           currentTeacher,
                                           childrenNames,
+                                          group.code,
                                           Boolean(checked),
                                         )
                                       }
