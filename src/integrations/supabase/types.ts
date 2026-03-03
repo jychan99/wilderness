@@ -178,6 +178,7 @@ export type Database = {
           BAP_NAME: string;
           PASSWORD: string;
           POSITION: string;
+          USE_YN: boolean;
         };
         Insert: {
           USER_CODE: string;
@@ -186,6 +187,7 @@ export type Database = {
           BAP_NAME: string;
           PASSWORD: string;
           POSITION: string;
+          USE_YN: boolean;
         };
         Update: {
           USER_CODE?: string;
@@ -194,6 +196,7 @@ export type Database = {
           BAP_NAME?: string;
           PASSWORD?: string;
           POSITION?: string;
+          USE_YN?: boolean;
         };
       };
       USER_MANAGE_GRADE: {

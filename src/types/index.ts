@@ -9,7 +9,25 @@ export type Position =
   | "일반"
   | "";
 
-export type Grade = "모든학년" | "유치부" | "초등부" | "초1" | "초2" | "초3" | "초4" | "초5" | "초6" | "중등부" | "중1" | "중2" | "중3" | "고등부" | "고1" | "고2" | "고3" | "";
+export type Grade =
+  | "모든학년"
+  | "유치부"
+  | "초등부"
+  | "초1"
+  | "초2"
+  | "초3"
+  | "초4"
+  | "초5"
+  | "초6"
+  | "중등부"
+  | "중1"
+  | "중2"
+  | "중3"
+  | "고등부"
+  | "고1"
+  | "고2"
+  | "고3"
+  | "";
 
 //사용자(로그인)
 export interface User {
@@ -30,6 +48,7 @@ export interface USER_MAIN {
   BAP_NAME: string; // 세례명
   PASSWORD: string;
   POSITION: number;
+  USE_YN: boolean;
 }
 
 //학생메인

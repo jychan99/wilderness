@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { USER_MAIN, Position, Grade, NOTIFICATION } from "@/types";
+import { USER_MAIN, NOTIFICATION } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 
 type UserWithGrades = USER_MAIN & { MANAGE_GRADES: string[] };
@@ -8,49 +8,49 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Plus, Users, Trash2, Bell, Edit, ArrowLeft } from "lucide-react";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { Plus, Users, Trash2, Bell, ArrowLeft } from "lucide-react";
 
-const gradeGroups = [
-  { label: "유치부", children: ["유치부"] },
-  { label: "초등부", children: ["초1", "초2", "초3", "초4", "초5", "초6"] },
-  { label: "중등부", children: ["중1", "중2", "중3"] },
-  { label: "고등부", children: ["고1", "고2", "고3"] },
-];
+type ConfirmDialogState = {
+  open: boolean;
+  title: string;
+  description: string;
+  actionLabel: string;
+  actionVariant?: "default" | "destructive";
+  onConfirm: (() => void) | null;
+};
 
 const Admin = () => {
   const queryClient = useQueryClient();
-  const [showAdd, setShowAdd] = useState(false);
+  const { toast } = useToast();
   const [showNotification, setShowNotification] = useState(false);
   const [selectedNotification, setSelectedNotification] =
     useState<NOTIFICATION | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    baptismalName: "",
-    username: "",
-    password: "",
-    position: "" as Position,
-    grades: [] as string[],
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
+    open: false,
+    title: "",
+    description: "",
+    actionLabel: "확인",
+    actionVariant: "default",
+    onConfirm: null,
   });
   const [notificationForm, setNotificationForm] = useState({
     title: "",
@@ -60,47 +60,6 @@ const Admin = () => {
     title: "",
     content: "",
   });
-
-  const positions: Position[] = ["회장", "부회장", "총무", "서기", "일반"];
-  const grades: Grade[] = [
-    "모든학년",
-    "유치부",
-    "초등부",
-    "초1",
-    "초2",
-    "초3",
-    "초4",
-    "초5",
-    "초6",
-    "중등부",
-    "중1",
-    "중2",
-    "중3",
-    "고등부",
-    "고1",
-    "고2",
-    "고3",
-  ];
-
-  // 학년 코드 변환 함수
-  const gradeToCode = (grade: string): string => {
-    const gradeMap: { [key: string]: string } = {
-      유치부: "K",
-      초1: "E1",
-      초2: "E2",
-      초3: "E3",
-      초4: "E4",
-      초5: "E5",
-      초6: "E6",
-      중1: "M1",
-      중2: "M2",
-      중3: "M3",
-      고1: "H1",
-      고2: "H2",
-      고3: "H3",
-    };
-    return gradeMap[grade] || grade;
-  };
 
   const codeToLabel = (code: string): string => {
     const codeMap: { [key: string]: string } = {
@@ -146,19 +105,6 @@ const Admin = () => {
     return legacyMap[code] || code;
   };
 
-  // 직책을 숫자로 변환
-  const positionToNumber = (position: Position | ""): number => {
-    const positionMap: { [key: string]: number } = {
-      관리자: 0,
-      회장: 1,
-      부회장: 2,
-      총무: 3,
-      서기: 4,
-      일반: 5,
-    };
-    return positionMap[position] || 5;
-  };
-
   // 숫자를 직책으로 변환
   const numberToPosition = (num: number | string): string => {
     const numberMap: { [key: number]: string } = {
@@ -171,55 +117,6 @@ const Admin = () => {
     };
     const numValue = typeof num === "string" ? parseInt(num) : num;
     return numberMap[numValue] || "일반";
-  };
-
-  // 학년을 숫자로 변환
-  const gradeToNumber = (grade: Grade | ""): number => {
-    const gradeMap: { [key: string]: number } = {
-      모든학년: 0,
-      유치부: 1,
-      초등부: 2,
-      초1: 3,
-      초2: 4,
-      초3: 5,
-      초4: 6,
-      초5: 7,
-      초6: 8,
-      중등부: 9,
-      중1: 10,
-      중2: 11,
-      중3: 12,
-      고등부: 13,
-      고1: 14,
-      고2: 15,
-      고3: 16,
-    };
-    return gradeMap[grade] || 0;
-  };
-
-  // 숫자를 학년으로 변환
-  const numberToGrade = (num: number | string): string => {
-    const numberMap: { [key: number]: string } = {
-      0: "모든학년",
-      1: "유치부",
-      2: "초등부",
-      3: "초1",
-      4: "초2",
-      5: "초3",
-      6: "초4",
-      7: "초5",
-      8: "초6",
-      9: "중등부",
-      10: "중1",
-      11: "중2",
-      12: "중3",
-      13: "고등부",
-      14: "고1",
-      15: "고2",
-      16: "고3",
-    };
-    const numValue = typeof num === "string" ? parseInt(num) : num;
-    return numberMap[numValue] || "모든학년";
   };
 
   // 사용자 목록 조회 (USER_MANAGE_GRADE와 조인)
@@ -257,6 +154,7 @@ const Admin = () => {
 
   // 관리자만 필터링 (POSITION이 숫자 0)
   const admins = users.filter((u) => u.POSITION === 0);
+  const pendingUsers = users.filter((u) => u.USE_YN !== true);
 
   // 관리자 공지사항 목록 조회
   const { data: notifications = [] } = useQuery<NOTIFICATION[], Error>({
@@ -269,60 +167,6 @@ const Admin = () => {
         .order("CREATED_AT", { ascending: false });
       if (error) throw error;
       return data || [];
-    },
-  });
-
-  // 사용자 추가 mutation
-  const addUserMutation = useMutation({
-    mutationFn: async (params: {
-      user: Omit<USER_MAIN, "USER_CODE">;
-      grades: string[];
-    }) => {
-      // USER_MAIN에 사용자 추가
-      const { data: userData, error: userError } = await (supabase as any)
-        .from("USER_MAIN")
-        .insert([params.user])
-        .select();
-
-      if (userError) {
-        console.error("Insert USER_MAIN error:", userError);
-        throw userError;
-      }
-
-      if (userData && userData[0] && params.grades.length > 0) {
-        // USER_MANAGE_GRADE에 담당학년 다건 추가 (한글을 코드로 변환)
-        const rows = params.grades.map((grade) => ({
-          USER_CODE: userData[0].USER_CODE,
-          MANAGE_GRADE: gradeToCode(grade),
-        }));
-
-        const { error: gradeError } = await (supabase as any)
-          .from("USER_MANAGE_GRADE")
-          .insert(rows);
-
-        if (gradeError) {
-          console.error("Insert USER_MANAGE_GRADE error:", gradeError);
-          throw gradeError;
-        }
-      }
-
-      return userData;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["usermain"] });
-      setForm({
-        name: "",
-        baptismalName: "",
-        username: "",
-        password: "",
-        position: "" as Position,
-        grades: [],
-      });
-      setShowAdd(false);
-    },
-    onError: (error) => {
-      console.error("Mutation error:", error);
-      alert("사용자 추가 중 오류가 발생했습니다: " + (error as any).message);
     },
   });
 
@@ -345,6 +189,74 @@ const Admin = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["usermain"] });
+      toast({
+        title: "사용자 삭제 완료",
+        description: "사용자 계정을 삭제했습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "사용자 삭제 실패",
+        description:
+          "사용자 삭제 중 오류가 발생했습니다: " + (error as any).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveUserMutation = useMutation({
+    mutationFn: async (userCode: string) => {
+      const { error } = await (supabase as any)
+        .from("USER_MAIN")
+        .update({ USE_YN: true })
+        .eq("USER_CODE", userCode);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["usermain"] });
+      toast({
+        title: "사용자 승인 완료",
+        description: "승인된 사용자는 이제 로그인할 수 있습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "사용자 승인 실패",
+        description:
+          "사용자 승인 중 오류가 발생했습니다: " + (error as any).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectUserMutation = useMutation({
+    mutationFn: async (userCode: string) => {
+      const { error: gradeError } = await supabase
+        .from("USER_MANAGE_GRADE")
+        .delete()
+        .eq("USER_CODE", userCode);
+      if (gradeError) throw gradeError;
+
+      const { error: userError } = await supabase
+        .from("USER_MAIN")
+        .delete()
+        .eq("USER_CODE", userCode);
+      if (userError) throw userError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["usermain"] });
+      toast({
+        title: "사용자 거부 완료",
+        description: "요청한 회원가입 계정을 삭제했습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "사용자 거부 실패",
+        description:
+          "사용자 거부 중 오류가 발생했습니다: " + (error as any).message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -364,7 +276,12 @@ const Admin = () => {
       setShowNotification(false);
     },
     onError: (error) => {
-      alert("공지사항 추가 중 오류가 발생했습니다: " + (error as any).message);
+      toast({
+        title: "공지사항 추가 실패",
+        description:
+          "공지사항 추가 중 오류가 발생했습니다: " + (error as any).message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -379,6 +296,18 @@ const Admin = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      toast({
+        title: "공지사항 삭제 완료",
+        description: "공지사항을 삭제했습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "공지사항 삭제 실패",
+        description:
+          "공지사항 삭제 중 오류가 발생했습니다: " + (error as any).message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -401,68 +330,60 @@ const Admin = () => {
       setSelectedNotification(null);
     },
     onError: (error) => {
-      alert("공지사항 수정 중 오류가 발생했습니다: " + (error as any).message);
+      toast({
+        title: "공지사항 수정 실패",
+        description:
+          "공지사항 수정 중 오류가 발생했습니다: " + (error as any).message,
+        variant: "destructive",
+      });
     },
   });
 
-  const handleAdd = () => {
-    if (
-      !form.name ||
-      !form.username ||
-      !form.password ||
-      !form.position
-    )
-      return;
-
-    // 회장이 아닌데 학년이 선택되지 않은 경우
-    if (form.position !== "회장" && form.grades.length === 0) {
-      alert("담당학년을 선택해주세요.");
-      return;
-    }
-
-    const newUser: Omit<USER_MAIN, "USER_CODE"> = {
-      ID: form.username,
-      NAME: form.name,
-      BAP_NAME: form.baptismalName,
-      PASSWORD: form.password,
-      POSITION: positionToNumber(form.position),
-    };
-
-    // 회장은 모든 학년, 아니면 선택한 학년들
-    const allGrades = ["유치부", "초1", "초2", "초3", "초4", "초5", "초6", "중1", "중2", "중3", "고1", "고2", "고3"];
-    const grades = form.position === "회장" ? allGrades : form.grades;
-
-    addUserMutation.mutate({ user: newUser, grades });
-  };
-
-  const toggleGrade = (grade: string, checked: boolean) => {
-    const nextGrades = checked
-      ? Array.from(new Set([...form.grades, grade]))
-      : form.grades.filter((item) => item !== grade);
-    setForm({ ...form, grades: nextGrades });
-  };
-
-  const toggleGroup = (children: string[], checked: boolean) => {
-    const nextGrades = checked
-      ? Array.from(new Set([...form.grades, ...children]))
-      : form.grades.filter((item) => !children.includes(item));
-    setForm({ ...form, grades: nextGrades });
-  };
-
-  const formatGradesLabel = (grades: string[]) => {
-    if (grades.length === 0) return "학년 선택";
-    if (grades.length <= 2) return grades.join(", ");
-    return `${grades.slice(0, 2).join(", ")} 외 ${grades.length - 2}개`;
+  const openConfirmDialog = (config: Omit<ConfirmDialogState, "open">) => {
+    setConfirmDialog({
+      open: true,
+      ...config,
+    });
   };
 
   const handleDelete = (USER_CODE: string) => {
-    if (!confirm("정말 삭제하시겠습니까?")) return;
-    deleteUserMutation.mutate(USER_CODE);
+    openConfirmDialog({
+      title: "사용자 삭제",
+      description: "정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+      actionLabel: "삭제",
+      actionVariant: "destructive",
+      onConfirm: () => deleteUserMutation.mutate(USER_CODE),
+    });
+  };
+
+  const handleApproveUser = (userCode: string) => {
+    openConfirmDialog({
+      title: "회원가입 승인",
+      description:
+        "해당 사용자를 승인하시겠습니까? 승인 후 로그인할 수 있습니다.",
+      actionLabel: "승인",
+      actionVariant: "default",
+      onConfirm: () => approveUserMutation.mutate(userCode),
+    });
+  };
+
+  const handleRejectUser = (userCode: string) => {
+    openConfirmDialog({
+      title: "회원가입 거부",
+      description: "해당 사용자를 거부하고 삭제하시겠습니까?",
+      actionLabel: "거부",
+      actionVariant: "destructive",
+      onConfirm: () => rejectUserMutation.mutate(userCode),
+    });
   };
 
   const handleAddNotification = () => {
     if (!notificationForm.title || !notificationForm.content) {
-      alert("제목과 내용을 입력해주세요.");
+      toast({
+        title: "입력 필요",
+        description: "제목과 내용을 입력해주세요.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -475,8 +396,13 @@ const Admin = () => {
   };
 
   const handleDeleteNotification = (notificationId: string) => {
-    if (!confirm("정말 삭제하시겠습니까?")) return;
-    deleteNotificationMutation.mutate(notificationId);
+    openConfirmDialog({
+      title: "공지사항 삭제",
+      description: "정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+      actionLabel: "삭제",
+      actionVariant: "destructive",
+      onConfirm: () => deleteNotificationMutation.mutate(notificationId),
+    });
   };
 
   const handleEditStart = (notification: NOTIFICATION) => {
@@ -563,146 +489,45 @@ const Admin = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <Dialog open={showAdd} onOpenChange={setShowAdd}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              유저 추가
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-heading">유저 추가</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3 pt-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>이름</Label>
-                  <Input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="이름"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>세례명</Label>
-                  <Input
-                    value={form.baptismalName}
-                    onChange={(e) =>
-                      setForm({ ...form, baptismalName: e.target.value })
-                    }
-                    placeholder="세례명"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>아이디</Label>
-                  <Input
-                    value={form.username}
-                    onChange={(e) =>
-                      setForm({ ...form, username: e.target.value })
-                    }
-                    placeholder="로그인 아이디"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>비밀번호</Label>
-                  <Input
-                    type="password"
-                    value={form.password}
-                    onChange={(e) =>
-                      setForm({ ...form, password: e.target.value })
-                    }
-                    placeholder="비밀번호"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>직책</Label>
-                <Select
-                  value={form.position}
-                  onValueChange={(v) =>
-                    setForm({ ...form, position: v as Position })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="직책 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {positions.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>담당학년</Label>
-                {form.position === "회장" ? (
-                  <Input value="모든학년 (자동 설정)" disabled />
-                ) : (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        {formatGradesLabel(form.grades)}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 p-3" align="start" style={{ zIndex: 9999 }}>
-                      <div className="space-y-3">
-                        {gradeGroups.map((group) => {
-                          const selectedCount = group.children.filter((grade) =>
-                            form.grades.includes(grade),
-                          ).length;
-                          const allSelected = selectedCount === group.children.length;
-
-                          return (
-                            <div key={group.label} className="space-y-2">
-                              <label className="flex items-center gap-2">
-                                <Checkbox
-                                  checked={allSelected}
-                                  onCheckedChange={(checked) =>
-                                    toggleGroup(group.children, Boolean(checked))
-                                  }
-                                />
-                                <span className="text-sm font-medium">{group.label}</span>
-                              </label>
-                              <div className="grid grid-cols-3 gap-2 pl-6">
-                                {group.children.map((grade) => (
-                                  <label
-                                    key={grade}
-                                    className="flex items-center gap-1.5 text-sm"
-                                  >
-                                    <Checkbox
-                                      checked={form.grades.includes(grade)}
-                                      onCheckedChange={(checked) =>
-                                        toggleGrade(grade, Boolean(checked))
-                                      }
-                                    />
-                                    <span>{grade}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </div>
-              <Button onClick={handleAdd} className="w-full">
-                추가
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+      <AlertDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => {
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open,
+            ...(open ? {} : { onConfirm: null }),
+          }));
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              className={
+                confirmDialog.actionVariant === "destructive"
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : ""
+              }
+              onClick={() => {
+                confirmDialog.onConfirm?.();
+                setConfirmDialog((prev) => ({
+                  ...prev,
+                  open: false,
+                  onConfirm: null,
+                }));
+              }}
+            >
+              {confirmDialog.actionLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* User list */}
       <div>
@@ -755,10 +580,65 @@ const Admin = () => {
           )}
         </div>
       </div>
-
       {/* Separator */}
       <hr className="border-t border-border" />
 
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-medium">가입 승인 대기</p>
+          <p className="text-sm text-muted-foreground">
+            총 {pendingUsers.length}명
+          </p>
+        </div>
+        <div className="space-y-2">
+          {pendingUsers.map((u) => (
+            <div
+              key={u.USER_CODE}
+              className="card-classic p-4 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Users className="w-4.5 h-4.5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">
+                    {u.NAME}{" "}
+                    <span className="text-muted-foreground">
+                      ({u.BAP_NAME})
+                    </span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">@{u.ID}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleApproveUser(u.USER_CODE)}
+                  disabled={approveUserMutation.isPending}
+                >
+                  승인
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleRejectUser(u.USER_CODE)}
+                  disabled={rejectUserMutation.isPending}
+                >
+                  거부
+                </Button>
+              </div>
+            </div>
+          ))}
+          {pendingUsers.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              승인 대기중인 사용자가 없습니다.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Separator */}
+      <hr className="border-t border-border" />
       {/* Notification Section */}
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">관리자 공지사항</p>
@@ -812,7 +692,6 @@ const Admin = () => {
           </DialogContent>
         </Dialog>
       </div>
-
       {/* Notification List */}
       <div className="space-y-2">
         {notifications.map((notification) => (
@@ -823,8 +702,8 @@ const Admin = () => {
           >
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center mt-0.5">
-                  <Bell className="w-4.5 h-4.5 text-blue-500" />
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+                  <Bell className="w-4.5 h-4.5 text-primary" />
                 </div>
                 <div className="flex-1">
                   <h4 className="font-medium text-sm mb-1">

@@ -4,7 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (
+    username: string,
+    password: string,
+  ) => Promise<{ success: boolean; errorCode?: string }>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
 }
@@ -92,7 +95,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (
     username: string,
     password: string,
-  ): Promise<boolean> => {
+  ): Promise<{ success: boolean; errorCode?: string }> => {
     try {
       const { data, error } = await supabase
         .from("USER_MAIN")
@@ -102,10 +105,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .single();
 
       if (error || !data) {
-        return false;
+        return {
+          success: false,
+          errorCode: error?.code,
+        };
       }
 
       const userData = data as USER_MAIN;
+
+      if (!userData.USE_YN) {
+        return {
+          success: false,
+          errorCode: "ACCOUNT_PENDING_APPROVAL",
+        };
+      }
 
       // USER_MANAGE_GRADE 테이블에서 담당학년 조회 (다중 학년 배열로)
       const { data: gradeData } = await supabase
@@ -122,10 +135,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const mappedUser = mapUserMainToUser(userData, manageGrades);
       setUser(mappedUser);
-      return true;
+      return { success: true };
     } catch (err) {
       console.error("Login error:", err);
-      return false;
+      const errorCode =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code?: string }).code ?? "")
+          : undefined;
+      return { success: false, errorCode };
     }
   };
 
