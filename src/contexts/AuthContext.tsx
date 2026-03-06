@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { User, USER_MAIN } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { verifyPassword } from "@/utils/password";
 
 interface AuthContextType {
   user: User | null;
@@ -101,7 +102,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .from("USER_MAIN")
         .select("*")
         .eq("ID", username)
-        .eq("PASSWORD", password)
         .single();
 
       if (error || !data) {
@@ -112,6 +112,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const userData = data as USER_MAIN;
+      const isPasswordValid = await verifyPassword(password, userData.PASSWORD);
+
+      if (!isPasswordValid) {
+        return { success: false };
+      }
 
       if (!userData.USE_YN) {
         return {

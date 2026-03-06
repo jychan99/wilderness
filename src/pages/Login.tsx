@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Church } from "lucide-react";
+import { hashPassword } from "@/utils/password";
 
 const Login = () => {
   const { login } = useAuth();
@@ -40,17 +41,19 @@ const Login = () => {
       return;
     }
 
-    const newUser: Omit<USER_MAIN, "USER_CODE"> = {
-      ID: form.username,
-      NAME: form.name,
-      BAP_NAME: form.baptismalName,
-      PASSWORD: form.password,
-      POSITION: 5,
-      USE_YN: false,
-    };
-
     try {
       setIsAddingUser(true);
+      const hashedPassword = await hashPassword(form.password);
+
+      const newUser: Omit<USER_MAIN, "USER_CODE"> = {
+        ID: form.username,
+        NAME: form.name,
+        BAP_NAME: form.baptismalName,
+        PASSWORD: hashedPassword,
+        POSITION: 5,
+        USE_YN: false,
+      };
+
       const { data: userData, error: userError } = await (supabase as any)
         .from("USER_MAIN")
         .insert([newUser])
@@ -116,11 +119,6 @@ const Login = () => {
               교리교사 ERP시스템
             </p>
           </div>
-          <Label>
-            ※ 로그인할때 불편하실것 같아 소문자로 변경했습니다. ex&#41; JYC →
-            jyc
-          </Label>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">아이디</Label>

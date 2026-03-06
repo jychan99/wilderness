@@ -16,6 +16,7 @@ import {
   getPositionLabel,
   getGradeLabel,
 } from "@/utils/menuPermissions";
+import { hashPassword } from "@/utils/password";
 import {
   LayoutDashboard,
   Users,
@@ -66,7 +67,7 @@ const Layout = ({ children }: LayoutProps) => {
       BAP_NAME: profileForm.BAP_NAME,
     };
     if (profileForm.PASSWORD) {
-      payload.PASSWORD = profileForm.PASSWORD;
+      payload.PASSWORD = await hashPassword(profileForm.PASSWORD);
     }
 
     const { error } = await (supabase as any)

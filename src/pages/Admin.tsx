@@ -247,7 +247,7 @@ const Admin = () => {
       queryClient.invalidateQueries({ queryKey: ["usermain"] });
       toast({
         title: "사용자 거부 완료",
-        description: "요청한 회원가입 계정을 삭제했습니다.",
+        description: "회원가입 요청을 거부했습니다.",
       });
     },
     onError: (error) => {
