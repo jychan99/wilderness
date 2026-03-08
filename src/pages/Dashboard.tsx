@@ -249,12 +249,48 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
         </div>
       ) : adminNotifications.length > 0 ? (
         <p className="font-bold text-sm" style={{ color: "#2563eb" }}>
-          🛠️ {adminNotifications[0].CONTENT}
+          {adminNotifications[0].CONTENT}
         </p>
       ) : (
         <p className="text-sm text-muted-foreground"> 업데이트가 없습니다. </p>
       )}
       {/* </div> */}
+
+      {/* Chairman Notifications */}
+      <div className="card-classic p-5">
+        <button
+          onClick={() => onTabChange("notifications")}
+          className="font-heading font-semibold text-lg mb-3 hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
+        >
+          📢 공지사항
+          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </button>
+        {chairmanNotificationsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        ) : chairmanNotifications.length > 0 ? (
+          <div className="border border-border rounded-lg p-4">
+            <div className="flex items-start justify-between mb-2">
+              <h4 className="font-medium text-sm flex-1">
+                {chairmanNotifications[0].TITLE}
+              </h4>
+              <span className="text-xs text-muted-foreground ml-2 whitespace-nowrap">
+                {new Date(
+                  chairmanNotifications[0].CREATED_AT,
+                ).toLocaleDateString("ko-KR")}
+              </span>
+            </div>
+            <p className="text-sm text-foreground/80 mb-2">
+              {chairmanNotifications[0].CONTENT}
+            </p>
+          </div>
+        ) : (
+          <p className="text-center text-sm text-muted-foreground py-8">
+            공지사항이 없습니다.
+          </p>
+        )}
+      </div>
 
       {/* Calendar */}
       <div className="card-classic p-5">
@@ -612,42 +648,6 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">
             회의록이 없습니다.
-          </p>
-        )}
-      </div>
-
-      {/* Chairman Notifications */}
-      <div className="card-classic p-5">
-        <button
-          onClick={() => onTabChange("notifications")}
-          className="font-heading font-semibold text-lg mb-3 hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
-        >
-          📢 공지사항
-          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-        </button>
-        {chairmanNotificationsLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin" />
-          </div>
-        ) : chairmanNotifications.length > 0 ? (
-          <div className="border border-border rounded-lg p-4">
-            <div className="flex items-start justify-between mb-2">
-              <h4 className="font-medium text-sm flex-1">
-                {chairmanNotifications[0].TITLE}
-              </h4>
-              <span className="text-xs text-muted-foreground ml-2 whitespace-nowrap">
-                {new Date(
-                  chairmanNotifications[0].CREATED_AT,
-                ).toLocaleDateString("ko-KR")}
-              </span>
-            </div>
-            <p className="text-sm text-foreground/80 mb-2">
-              {chairmanNotifications[0].CONTENT}
-            </p>
-          </div>
-        ) : (
-          <p className="text-center text-sm text-muted-foreground py-8">
-            공지사항이 없습니다.
           </p>
         )}
       </div>
