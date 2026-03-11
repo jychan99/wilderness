@@ -26,6 +26,27 @@ interface DashboardProps {
   onTabChange: (tab: string) => void;
 }
 
+interface DailyMissaResponse {
+  date: string;
+  url: string;
+  missaTitle: string | null;
+  count: number;
+  h4Texts: string[];
+}
+
+const normalizeExternalUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+};
+
+const getTodayKstDateForInput = () => {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().split("T")[0];
+};
+
 const Dashboard = ({ onTabChange }: DashboardProps) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
@@ -37,6 +58,7 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
   const [selectedEvent, setSelectedEvent] = useState<SCHEDULE | null>(null);
   const [editingEvent, setEditingEvent] = useState<SCHEDULE | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [dailyMissaDate, setDailyMissaDate] = useState(getTodayKstDateForInput);
   const queryClient = useQueryClient();
 
   // 캘린더 이벤트 조회
@@ -113,6 +135,36 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
         .limit(1);
       if (error) throw error;
       return data || [];
+    },
+  });
+
+  // 매일미사 스크래핑 조회
+  const {
+    data: dailyMissa,
+    isLoading: dailyMissaLoading,
+    isFetching: dailyMissaFetching,
+    error: dailyMissaError,
+  } = useQuery<DailyMissaResponse, Error>({
+    queryKey: ["daily_missa", dailyMissaDate],
+    enabled: Boolean(dailyMissaDate),
+    queryFn: async (): Promise<DailyMissaResponse> => {
+      const { data, error } = await supabase.functions.invoke("daily_missa", {
+        body: { date: dailyMissaDate },
+      });
+
+      if (error) {
+        throw new Error(error.message || "매일미사 조회에 실패했습니다.");
+      }
+
+      if (
+        !data ||
+        typeof data !== "object" ||
+        !Array.isArray((data as DailyMissaResponse).h4Texts)
+      ) {
+        throw new Error("매일미사 응답 형식이 올바르지 않습니다.");
+      }
+
+      return data as DailyMissaResponse;
     },
   });
 
@@ -456,42 +508,111 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
         )}
       </div>
 
-      {/* Today's Schedule */}
-      <div className="card-classic p-5">
-        <h3 className="font-heading font-semibold text-base sm:text-lg mb-4">
-          📌 오늘 일정
-        </h3>
-        {eventsLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin" />
-          </div>
-        ) : todayEvents.length > 0 || todayFeastLabels.length > 0 ? (
-          <div className="space-y-2">
-            {todayFeastLabels.map((feastLabel) => (
-              <p
-                key={feastLabel}
-                className="p-3 rounded-lg border border-primary/30 bg-primary/10 text-primary font-semibold"
-              >
-                {feastLabel}
-              </p>
-            ))}
-            {todayEvents.map((event) => (
-              <button
-                key={event.ID}
-                onClick={() => setSelectedEvent(event)}
-                className="w-full text-left p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
-              >
-                <p className="font-semibold text-base text-foreground">
-                  {event.TITLE}
+      <div className="grid grid-cols-1 md:grid-cols-10 gap-6">
+        {/* Today's Schedule */}
+        <div className="card-classic p-5 md:col-span-4">
+          <h3 className="font-heading font-semibold text-base sm:text-lg mb-4">
+            📌 오늘 일정
+          </h3>
+          {eventsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          ) : todayEvents.length > 0 || todayFeastLabels.length > 0 ? (
+            <div className="space-y-2">
+              {todayFeastLabels.map((feastLabel) => (
+                <p
+                  key={feastLabel}
+                  className="p-3 rounded-lg border border-primary/30 bg-primary/10 text-primary font-semibold"
+                >
+                  {feastLabel}
                 </p>
-              </button>
-            ))}
+              ))}
+              {todayEvents.map((event) => (
+                <button
+                  key={event.ID}
+                  onClick={() => setSelectedEvent(event)}
+                  className="w-full text-left p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                >
+                  <p className="font-semibold text-base text-foreground">
+                    {event.TITLE}
+                  </p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-sm text-muted-foreground py-8">
+              오늘 일정이 없습니다.
+            </p>
+          )}
+        </div>
+
+        {/* Daily Missa Scraping */}
+        <div className="card-classic p-5 md:col-span-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <button
+              type="button"
+              className="font-heading font-semibold text-base sm:text-lg hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
+              onClick={() => {
+                const sourceUrl = normalizeExternalUrl(dailyMissa?.url ?? "");
+                if (!sourceUrl) return;
+                window.open(sourceUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              ✝️ 매일미사
+              <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="daily-missa-date" className="text-sm">
+                날짜
+              </Label>
+              <Input
+                id="daily-missa-date"
+                type="date"
+                value={dailyMissaDate}
+                onChange={(e) => setDailyMissaDate(e.target.value)}
+                className="w-[170px]"
+              />
+            </div>
           </div>
-        ) : (
-          <p className="text-center text-sm text-muted-foreground py-8">
-            오늘 일정이 없습니다.
-          </p>
-        )}
+
+          {!dailyMissaDate ? (
+            <p className="text-center text-sm text-muted-foreground py-8">
+              날짜를 선택하면 자동으로 조회됩니다.
+            </p>
+          ) : dailyMissaLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          ) : dailyMissaError ? (
+            <p className="text-sm text-destructive py-2">
+              {dailyMissaError.message}
+            </p>
+          ) : dailyMissa && dailyMissa.h4Texts.length > 0 ? (
+            <div className="space-y-3">
+              <div className="border border-border rounded-lg p-4">
+                <pre className="text-sm whitespace-pre-wrap font-body text-foreground/80">
+                  {dailyMissa.missaTitle || "제목이 없습니다."}
+                </pre>
+              </div>
+              <div className="border border-border rounded-lg p-4">
+                <pre className="text-sm whitespace-pre-wrap font-body text-foreground/80">
+                  {dailyMissa.h4Texts.join("\n")}
+                </pre>
+              </div>
+              {dailyMissaFetching && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />새 날짜로 조회
+                  중...
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-center text-sm text-muted-foreground py-8">
+              해당 날짜의 h4 텍스트가 없습니다.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Event Detail */}
