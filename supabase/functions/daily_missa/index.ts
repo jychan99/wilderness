@@ -115,31 +115,52 @@ serve(async (req: Request) => {
       return json({ error: "HTML 파싱 실패" }, 500);
     }
 
-    // const missaTitle =
-    //   doc
-    //     ?.querySelector("#missa_title")
-    //     ?.textContent?.replace(/\s+/g, " ")
-    //     .trim() ?? null;
-    const missaTitle: string[] = [];
-    for (const node of doc.querySelectorAll("h3#missa_title")) {
-      const text = node.textContent?.replace(/\s+/g, " ").trim();
-      if (text) missaTitle.push(text);
-    }
+    const missaTitle =
+      doc
+        ?.querySelector("#missa_title")
+        ?.textContent?.replace(/\s+/g, " ")
+        .trim() ?? null;
 
-    console.log("missaTitle", missaTitle);
+    const gospelHeaderTexts: string[] = [];
+    const gospelStartTexts: string[] = [];
+    const gospelSectionTexts: string[] = [];
+    for (const node of doc.querySelectorAll(".bottompadding-sm:not(.row)")) {
+      const heading = node
+        .querySelector("h4")
+        ?.textContent?.replace(/\s+/g, " ")
+        .trim();
 
-    const h4Texts: string[] = [];
-    for (const node of doc.querySelectorAll("h4")) {
-      const text = node.textContent?.replace(/\s+/g, " ").trim();
-      if (text) h4Texts.push(text);
+      if (heading !== "복음") continue;
+
+      for (const headerRow of node.querySelectorAll(".row.bottompadding-sm")) {
+        const headerText = headerRow.textContent?.replace(/\s+/g, " ").trim();
+        if (headerText) gospelHeaderTexts.push(headerText);
+      }
+
+      for (const startRow of node.querySelectorAll(
+        ".row:not(.bottompadding-sm):not(.tjustify)",
+      )) {
+        const startText = startRow.textContent?.replace(/\s+/g, " ").trim();
+        if (startText) gospelStartTexts.push(startText);
+      }
+
+      for (const sectionRow of node.querySelectorAll(".row.tjustify")) {
+        const sectionText = sectionRow.textContent?.replace(/\s+/g, " ").trim();
+        if (!sectionText) continue;
+
+        const formattedSectionText = sectionText.replaceAll(".", ".\n").trim();
+        if (formattedSectionText) gospelSectionTexts.push(formattedSectionText);
+      }
     }
 
     return json({
       date,
       url: targetUrl,
       missaTitle,
-      count: h4Texts.length,
-      h4Texts,
+      count: gospelSectionTexts.length,
+      gospelHeaderTexts,
+      gospelStartTexts,
+      gospelSectionTexts,
     });
   } catch (err) {
     return json(

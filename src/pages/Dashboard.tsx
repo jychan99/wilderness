@@ -31,7 +31,21 @@ interface DailyMissaResponse {
   url: string;
   missaTitle: string | null;
   count: number;
-  h4Texts: string[];
+  gospelHeaderTexts: string[];
+  gospelStartTexts: string[];
+  gospelSectionTexts: string[];
+}
+
+interface DailyMissaLegacyResponse {
+  date: string;
+  url: string;
+  missaTitle: string | null;
+  count?: number;
+  h4Texts?: string[];
+  gospelHeaderTexts?: string[];
+  gospelStartTexts?: string[];
+  gospelProclamationTexts?: string[];
+  gospelSectionTexts?: string[];
 }
 
 const normalizeExternalUrl = (value: string) => {
@@ -156,15 +170,41 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
         throw new Error(error.message || "매일미사 조회에 실패했습니다.");
       }
 
-      if (
-        !data ||
-        typeof data !== "object" ||
-        !Array.isArray((data as DailyMissaResponse).h4Texts)
-      ) {
+      if (!data || typeof data !== "object") {
         throw new Error("매일미사 응답 형식이 올바르지 않습니다.");
       }
 
-      return data as DailyMissaResponse;
+      const payload = data as DailyMissaLegacyResponse;
+      const gospelHeaderTexts = Array.isArray(payload.gospelHeaderTexts)
+        ? payload.gospelHeaderTexts
+        : [];
+      const gospelStartTexts = Array.isArray(payload.gospelStartTexts)
+        ? payload.gospelStartTexts
+        : Array.isArray(payload.gospelProclamationTexts)
+          ? payload.gospelProclamationTexts
+          : [];
+      const gospelSectionTexts = Array.isArray(payload.gospelSectionTexts)
+        ? payload.gospelSectionTexts
+        : Array.isArray(payload.h4Texts)
+          ? payload.h4Texts
+          : null;
+
+      if (!gospelSectionTexts) {
+        throw new Error("매일미사 응답 형식이 올바르지 않습니다.");
+      }
+
+      return {
+        date: payload.date,
+        url: payload.url,
+        missaTitle: payload.missaTitle ?? null,
+        count:
+          typeof payload.count === "number"
+            ? payload.count
+            : gospelSectionTexts.length,
+        gospelHeaderTexts,
+        gospelStartTexts,
+        gospelSectionTexts,
+      };
     },
   });
 
@@ -588,16 +628,21 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
             <p className="text-sm text-destructive py-2">
               {dailyMissaError.message}
             </p>
-          ) : dailyMissa && dailyMissa.h4Texts.length > 0 ? (
+          ) : dailyMissa && dailyMissa.gospelSectionTexts.length > 0 ? (
             <div className="space-y-3">
               <div className="border border-border rounded-lg p-4">
                 <pre className="text-sm whitespace-pre-wrap font-body text-foreground/80">
                   {dailyMissa.missaTitle || "제목이 없습니다."}
+                  <br />
+                  {dailyMissa.gospelHeaderTexts.join("\n") ||
+                    "복음이 없습니다."}
                 </pre>
               </div>
               <div className="border border-border rounded-lg p-4">
                 <pre className="text-sm whitespace-pre-wrap font-body text-foreground/80">
-                  {dailyMissa.h4Texts.join("\n")}
+                  {dailyMissa.gospelStartTexts.join("\n")}
+                  <br />
+                  {dailyMissa.gospelSectionTexts.join("\n\n")}
                 </pre>
               </div>
               {dailyMissaFetching && (
@@ -609,7 +654,7 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
             </div>
           ) : (
             <p className="text-center text-sm text-muted-foreground py-8">
-              해당 날짜의 h4 텍스트가 없습니다.
+              해당 날짜의 복음 텍스트가 없습니다.
             </p>
           )}
         </div>
