@@ -25,6 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -57,7 +58,8 @@ const StudentManagement = () => {
   const [attendanceGradeFilter, setAttendanceGradeFilter] = useState<
     "all" | "K" | "E" | "M" | "H"
   >("all");
-  const [attendanceDetailGradeFilter, setAttendanceDetailGradeFilter] = useState<string>("all");
+  const [attendanceDetailGradeFilter, setAttendanceDetailGradeFilter] =
+    useState<string>("all");
   const [searchText, setSearchText] = useState("");
   const [attendanceDate, setAttendanceDate] = useState(
     new Date().toISOString().split("T")[0],
@@ -268,17 +270,17 @@ const StudentManagement = () => {
       ? students
       : students.filter((s) => {
           const studentGrade = String(s.GRADE);
-          
+
           // user.grade를 배열로 변환 (쉼표로 분리되는 형식: 초2,중2 또는 E2,M2)
           let userGradeList: string[] = [];
           const gradeStr = String(user.grade || "");
-          
+
           if (gradeStr.length > 0) {
             userGradeList = gradeStr
-              .split(/,/)  // 쉼표로 split
-              .map(g => g.trim())  // 각 요소 양쪽 공백 제거
-              .filter(g => g.length > 0)
-              .map(g => {
+              .split(/,/) // 쉼표로 split
+              .map((g) => g.trim()) // 각 요소 양쪽 공백 제거
+              .filter((g) => g.length > 0)
+              .map((g) => {
                 // 한글을 코드로 변환, 이미 코드면 그대로 반환
                 return gradeLabelToCode[g] || g;
               });
@@ -289,7 +291,8 @@ const StudentManagement = () => {
             // 정확한 일치 (예: E2 === E2)
             if (studentGrade === userCode) return true;
             // 부모 코드로 시작 (예: E는 E1, E2, ... 모두 포함)
-            if (userCode.length === 1 && studentGrade.startsWith(userCode)) return true;
+            if (userCode.length === 1 && studentGrade.startsWith(userCode))
+              return true;
             return false;
           });
         });
@@ -360,15 +363,22 @@ const StudentManagement = () => {
       const total = records.length;
       const missaPresent = records.filter((a) => a.MISSA_YN).length;
       const doctrinePresent = records.filter((a) => a.DOCTRINE_YN).length;
+      const missaRate =
+        total > 0 ? Math.round((missaPresent / total) * 100) : 0;
+      const doctrineRate =
+        total > 0 ? Math.round((doctrinePresent / total) * 100) : 0;
       const displayName = student.BAP_NAME
         ? `${student.NAME} (${student.BAP_NAME})`
         : student.NAME;
       return {
         name: displayName,
-        미사출석률: total > 0 ? Math.round((missaPresent / total) * 100) : 0,
-        교리출석률: total > 0 ? Math.round((doctrinePresent / total) * 100) : 0,
+        미사출석률: missaRate,
+        교리출석률: doctrineRate,
+        missaRate,
+        doctrineRate,
         미사출석: missaPresent,
         교리출석: doctrinePresent,
+        totalRecords: total,
       };
     });
   }, [
@@ -488,7 +498,8 @@ const StudentManagement = () => {
   const getGradeCategory = (grade: string): string => {
     const grade_str = String(grade);
     if (grade_str === "K") return "유치부";
-    if (["E1", "E2", "E3", "E4", "E5", "E6"].includes(grade_str)) return "초등부";
+    if (["E1", "E2", "E3", "E4", "E5", "E6"].includes(grade_str))
+      return "초등부";
     if (["M1", "M2", "M3"].includes(grade_str)) return "중등부";
     if (["H1", "H2", "H3"].includes(grade_str)) return "고등부";
     // 한글 학년이 들어온 경우
@@ -606,7 +617,12 @@ const StudentManagement = () => {
       return nameA.localeCompare(nameB, "ko-KR");
     });
     return list;
-  }, [filteredStudents, attendanceGradeFilter, attendanceDetailGradeFilter, searchText]);
+  }, [
+    filteredStudents,
+    attendanceGradeFilter,
+    attendanceDetailGradeFilter,
+    searchText,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -709,11 +725,13 @@ const StudentManagement = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {gradeCategory === "초등부" &&
-                          ["초1", "초2", "초3", "초4", "초5", "초6"].map((g) => (
-                            <SelectItem key={g} value={g}>
-                              {g}
-                            </SelectItem>
-                          ))}
+                          ["초1", "초2", "초3", "초4", "초5", "초6"].map(
+                            (g) => (
+                              <SelectItem key={g} value={g}>
+                                {g}
+                              </SelectItem>
+                            ),
+                          )}
                         {gradeCategory === "중등부" &&
                           ["중1", "중2", "중3"].map((g) => (
                             <SelectItem key={g} value={g}>
@@ -870,34 +888,103 @@ const StudentManagement = () => {
               </Select>
             </div>
           </div>
-          <div className="h-64 mb-6">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={attendanceStats}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="hsl(210, 25%, 88%)"
-                />
-                <XAxis dataKey="name" fontSize={12} />
-                <YAxis
-                  fontSize={12}
-                  allowDecimals={false}
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <Tooltip formatter={(value: number) => `${value}%`} />
-                <Bar
-                  dataKey="미사출석률"
-                  fill="hsl(210, 55%, 38%)"
-                  radius={[3, 3, 0, 0]}
-                />
-                <Bar
-                  dataKey="교리출석률"
-                  fill="hsl(210, 45%, 58%)"
-                  radius={[3, 3, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <Tabs defaultValue="chart" className="w-full mb-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="chart">그래프</TabsTrigger>
+              <TabsTrigger value="table">표</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="chart" className="mt-4">
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={attendanceStats}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="hsl(210, 25%, 88%)"
+                    />
+                    <XAxis dataKey="name" fontSize={12} />
+                    <YAxis
+                      fontSize={12}
+                      allowDecimals={false}
+                      domain={[0, 100]}
+                      tickFormatter={(value) => `${value}%`}
+                    />
+                    <Tooltip formatter={(value: number) => `${value}%`} />
+                    <Bar
+                      dataKey="미사출석률"
+                      fill="hsl(210, 55%, 38%)"
+                      radius={[3, 3, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="교리출석률"
+                      fill="hsl(210, 45%, 58%)"
+                      radius={[3, 3, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="table" className="mt-4">
+              {attendanceStats.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground border border-border rounded-lg">
+                  조회된 통계 데이터가 없습니다.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-border rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40">
+                        <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">
+                          학생
+                        </th>
+                        <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">
+                          미사 출석
+                        </th>
+                        <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">
+                          교리 출석
+                        </th>
+                        <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">
+                          총 회차
+                        </th>
+                        <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">
+                          미사 출석률
+                        </th>
+                        <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">
+                          교리 출석률
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendanceStats.map((stat, idx) => (
+                        <tr
+                          key={`${stat.name}-${idx}`}
+                          className="border-b border-border/60 hover:bg-muted/30"
+                        >
+                          <td className="py-2.5 px-3">{stat.name}</td>
+                          <td className="py-2.5 px-3 text-right">
+                            {stat.미사출석}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            {stat.교리출석}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            {stat.totalRecords}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-primary font-medium">
+                            {stat.missaRate}%
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-primary font-medium">
+                            {stat.doctrineRate}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
 
           {/* Per-student attendance detail */}
           <h4 className="font-heading font-semibold text-sm mb-3">
@@ -1007,7 +1094,9 @@ const StudentManagement = () => {
                 <SelectItem value="H">고등부</SelectItem>
               </SelectContent>
             </Select>
-            {(attendanceGradeFilter === "E" || attendanceGradeFilter === "M" || attendanceGradeFilter === "H") && (
+            {(attendanceGradeFilter === "E" ||
+              attendanceGradeFilter === "M" ||
+              attendanceGradeFilter === "H") && (
               <Select
                 value={attendanceDetailGradeFilter}
                 onValueChange={(v) => setAttendanceDetailGradeFilter(v)}
@@ -1148,7 +1237,9 @@ const StudentManagement = () => {
                       className="h-8 w-8"
                       onClick={() => {
                         setEditingStudent(student);
-                        setEditingGradeCategory(getGradeCategory(student.GRADE));
+                        setEditingGradeCategory(
+                          getGradeCategory(student.GRADE),
+                        );
                       }}
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -1310,7 +1401,10 @@ const StudentManagement = () => {
                   <Select
                     value={gradeToLabel(editingStudent.GRADE)}
                     onValueChange={(v) =>
-                      setEditingStudent({ ...editingStudent, GRADE: v as Grade })
+                      setEditingStudent({
+                        ...editingStudent,
+                        GRADE: v as Grade,
+                      })
                     }
                   >
                     <SelectTrigger>

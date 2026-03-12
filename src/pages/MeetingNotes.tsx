@@ -15,7 +15,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, ArrowLeft, Edit, Trash2 } from "lucide-react";
+import {
+  Plus,
+  FileText,
+  ArrowLeft,
+  Edit,
+  Trash2,
+  ChevronDown,
+} from "lucide-react";
 
 const MeetingNotes = () => {
   const { user } = useAuth();
@@ -24,6 +31,9 @@ const MeetingNotes = () => {
   const [selectedNote, setSelectedNote] = useState<MEETING | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [form, setForm] = useState({ TITLE: "", CONTENT: "" });
+  const [expandedMonthSections, setExpandedMonthSections] = useState<
+    Record<string, boolean>
+  >({});
 
   // 회의록 조회 (MEETING 테이블)
   const { data: notes = [] } = useQuery<MEETING[], Error>({
@@ -136,23 +146,40 @@ const MeetingNotes = () => {
     return hhmm ? `${datePart} ${hhmm}` : datePart;
   };
 
-  // 날짜별 그룹화
-  const groupedNotes = useMemo(() => {
-    const groups: { [date: string]: MEETING[] } = {};
+  const noteGroupsByMonth = useMemo(() => {
+    const grouped = new Map<string, MEETING[]>();
+
     notes.forEach((note) => {
-      const dateKey = formatDateOnly(note.DATE);
-      if (!groups[dateKey]) {
-        groups[dateKey] = [];
-      }
-      groups[dateKey].push(note);
+      const createdAt = new Date(note.DATE);
+      if (Number.isNaN(createdAt.getTime())) return;
+
+      const key = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, "0")}`;
+      const existing = grouped.get(key) || [];
+      existing.push(note);
+      grouped.set(key, existing);
     });
-    return groups;
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([key, items]) => {
+        const [year, month] = key.split("-");
+
+        return {
+          key,
+          label: `${year}년 ${Number(month)}월`,
+          items: items.sort(
+            (a, b) => new Date(b.DATE).getTime() - new Date(a.DATE).getTime(),
+          ),
+        };
+      });
   }, [notes]);
 
-  // 날짜 정렬 (최근이 위로)
-  const sortedDates = useMemo(() => {
-    return Object.keys(groupedNotes).sort((a, b) => b.localeCompare(a));
-  }, [groupedNotes]);
+  const toggleMonthSection = (monthKey: string, defaultExpanded: boolean) => {
+    setExpandedMonthSections((prev) => ({
+      ...prev,
+      [monthKey]: !(prev[monthKey] ?? defaultExpanded),
+    }));
+  };
 
   const handleSubmit = () => {
     if (!form.TITLE || !form.CONTENT) return;
@@ -342,47 +369,77 @@ const MeetingNotes = () => {
         )}
       </div>
 
-      <div className="space-y-4">
-        {sortedDates.map((date) => (
-          <div key={date} className="space-y-2">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary/10 border border-primary/20">
-              <span className="text-sm font-semibold text-primary">
-                {formatDateOnly(date)}
-              </span>
-            </div>
-            {groupedNotes[date].map((note) => (
+      <div className="space-y-3">
+        {noteGroupsByMonth.map((group, index) => {
+          const defaultExpanded = index === 0;
+          const isExpanded =
+            expandedMonthSections[group.key] ?? defaultExpanded;
+
+          return (
+            <div key={group.key} className="card-classic p-0 overflow-hidden">
               <button
-                key={note.ID}
-                onClick={() => setSelectedNote(note)}
-                className="w-full text-left card-classic p-4 hover:shadow-md transition-shadow"
+                type="button"
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                onClick={() => toggleMonthSection(group.key, defaultExpanded)}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mt-0.5">
-                      <FileText className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-sm">{note.TITLE}</h4>
-                        {note.DATE.startsWith(today) && (
-                          <Badge
-                            variant="destructive"
-                            className="text-xs px-1.5 py-0"
-                          >
-                            NEW
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {note.AUTHOR} · {formatDateTime(note.DATE)}
-                      </p>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${
+                      isExpanded ? "rotate-0" : "-rotate-90"
+                    }`}
+                  />
+                  <p className="text-sm font-medium">{group.label}</p>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {group.items.length}건
+                </p>
               </button>
-            ))}
+
+              {isExpanded && (
+                <div className="border-t border-border p-2 space-y-2">
+                  {group.items.map((note) => (
+                    <button
+                      key={note.ID}
+                      onClick={() => setSelectedNote(note)}
+                      className="w-full text-left p-3 rounded-lg hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mt-0.5">
+                            <FileText className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium text-sm">
+                                {note.TITLE}
+                              </h4>
+                              {note.DATE.startsWith(today) && (
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs px-1.5 py-0"
+                                >
+                                  NEW
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {note.AUTHOR} · {formatDateTime(note.DATE)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {noteGroupsByMonth.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            등록된 회의록이 없습니다.
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

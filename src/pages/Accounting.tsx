@@ -47,6 +47,10 @@ const Accounting = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [editingEntry, setEditingEntry] = useState<ACCOUNT | null>(null);
+  const [ledgerDateRange, setLedgerDateRange] = useState({
+    start: "",
+    end: "",
+  });
   const [dateRange, setDateRange] = useState({
     start: "",
     end: "",
@@ -313,6 +317,34 @@ const Accounting = () => {
 
   const formatAmount = (amount: number) =>
     amount.toLocaleString("ko-KR") + "원";
+
+  const formatDateOnly = (dateStr: string) => {
+    return dateStr.split("T")[0].split(" ")[0];
+  };
+
+  const ledgerEntries = useMemo(() => {
+    const { start, end } = ledgerDateRange;
+    const hasRange = Boolean(start || end);
+
+    let rangeStart = start;
+    let rangeEnd = end;
+
+    if (start && end && start > end) {
+      rangeStart = end;
+      rangeEnd = start;
+    }
+
+    const filtered = hasRange
+      ? entries.filter((entry) => {
+          const entryDate = formatDateOnly(entry.DATE);
+          if (rangeStart && entryDate < rangeStart) return false;
+          if (rangeEnd && entryDate > rangeEnd) return false;
+          return true;
+        })
+      : entries;
+
+    return [...filtered].sort((a, b) => b.DATE.localeCompare(a.DATE));
+  }, [entries, ledgerDateRange]);
 
   // 금액 입력 포맷팅 (쉼표 추가)
   const formatNumberInput = (value: string) => {
@@ -672,6 +704,53 @@ const Accounting = () => {
           </Dialog>
         </div>
 
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:w-[30rem]">
+            <div className="space-y-1.5">
+              <Label htmlFor="ledger-start-date">시작 날짜</Label>
+              <Input
+                id="ledger-start-date"
+                type="date"
+                value={ledgerDateRange.start}
+                onChange={(e) =>
+                  setLedgerDateRange((prev) => ({
+                    ...prev,
+                    start: e.target.value,
+                  }))
+                }
+                className="h-11 text-base"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ledger-end-date">종료 날짜</Label>
+              <Input
+                id="ledger-end-date"
+                type="date"
+                value={ledgerDateRange.end}
+                onChange={(e) =>
+                  setLedgerDateRange((prev) => ({
+                    ...prev,
+                    end: e.target.value,
+                  }))
+                }
+                className="h-11 text-base"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setLedgerDateRange({ start: "", end: "" })}
+              disabled={!ledgerDateRange.start && !ledgerDateRange.end}
+            >
+              기간 초기화
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              조회 결과 {ledgerEntries.length}건
+            </p>
+          </div>
+        </div>
+
         {/* Edit Dialog */}
         <Dialog
           open={!!editingEntry}
@@ -783,131 +862,139 @@ const Accounting = () => {
               </tr>
             </thead>
             <tbody>
-              {entries
-                .sort((a, b) => b.DATE.localeCompare(a.DATE))
-                .map((entry) => (
-                  <tr
-                    key={entry.ID}
-                    className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="py-2.5 px-3">{entry.DATE}</td>
-                    <td className="py-2.5 px-3">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                          entry.TYPE === "income"
-                            ? "bg-success/10 text-success"
-                            : "bg-destructive/10 text-destructive"
-                        }`}
-                      >
-                        {entry.TYPE === "income" ? "수입" : "지출"}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3">{entry.CATEGORY}</td>
-                    <td className="py-2.5 px-3">{entry.CONTENT}</td>
-                    <td
-                      className={`py-2.5 px-3 text-right font-medium ${
+              {ledgerEntries.map((entry) => (
+                <tr
+                  key={entry.ID}
+                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                >
+                  <td className="py-2.5 px-3">{formatDateOnly(entry.DATE)}</td>
+                  <td className="py-2.5 px-3">
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                         entry.TYPE === "income"
-                          ? "text-success"
-                          : "text-destructive"
+                          ? "bg-success/10 text-success"
+                          : "bg-destructive/10 text-destructive"
                       }`}
                     >
-                      {entry.TYPE === "income" ? "+" : "-"}
-                      {formatAmount(entry.AMOUNT)}
-                    </td>
-                    <td className="py-2.5 px-3 text-muted-foreground">
-                      {entry.REGISTERED_BY}
-                    </td>
-                    <td className="py-2.5 px-3 text-center space-x-1">
-                      {isTreasurer && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 inline-flex"
-                            onClick={() => handleEdit(entry)}
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 inline-flex text-destructive"
-                            onClick={() => handleDelete(entry.ID)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      {entry.TYPE === "income" ? "수입" : "지출"}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3">{entry.CATEGORY}</td>
+                  <td className="py-2.5 px-3">{entry.CONTENT}</td>
+                  <td
+                    className={`py-2.5 px-3 text-right font-medium ${
+                      entry.TYPE === "income"
+                        ? "text-success"
+                        : "text-destructive"
+                    }`}
+                  >
+                    {entry.TYPE === "income" ? "+" : "-"}
+                    {formatAmount(entry.AMOUNT)}
+                  </td>
+                  <td className="py-2.5 px-3 text-muted-foreground">
+                    {entry.REGISTERED_BY}
+                  </td>
+                  <td className="py-2.5 px-3 text-center space-x-1">
+                    {isTreasurer && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 inline-flex"
+                          onClick={() => handleEdit(entry)}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 inline-flex text-destructive"
+                          onClick={() => handleDelete(entry.ID)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {ledgerEntries.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-8 text-center text-sm text-muted-foreground"
+                  >
+                    해당 기간에 조회되는 거래 내역이 없습니다.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Mobile card list */}
         <div className="sm:hidden space-y-2">
-          {entries
-            .sort((a, b) => b.DATE.localeCompare(a.DATE))
-            .map((entry) => (
-              <div
-                key={entry.ID}
-                className="p-3 rounded-lg border border-border"
-              >
-                <div className="flex items-center justify-between mb-1.5">
+          {ledgerEntries.map((entry) => (
+            <div key={entry.ID} className="p-3 rounded-lg border border-border">
+              <div className="flex items-center justify-between mb-1.5">
+                <span
+                  className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    entry.TYPE === "income"
+                      ? "bg-success/10 text-success"
+                      : "bg-destructive/10 text-destructive"
+                  }`}
+                >
+                  {entry.TYPE === "income" ? "수입" : "지출"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDateOnly(entry.DATE)}
+                </span>
+              </div>
+              <p className="text-sm font-medium">{entry.CONTENT}</p>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-muted-foreground">
+                  {entry.CATEGORY} · {entry.REGISTERED_BY}
+                </span>
+                <div className="flex gap-1">
                   <span
-                    className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                    className={`text-sm font-bold ${
                       entry.TYPE === "income"
-                        ? "bg-success/10 text-success"
-                        : "bg-destructive/10 text-destructive"
+                        ? "text-success"
+                        : "text-destructive"
                     }`}
                   >
-                    {entry.TYPE === "income" ? "수입" : "지출"}
+                    {entry.TYPE === "income" ? "+" : "-"}
+                    {formatAmount(entry.AMOUNT)}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {entry.DATE}
-                  </span>
-                </div>
-                <p className="text-sm font-medium">{entry.CONTENT}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-muted-foreground">
-                    {entry.CATEGORY} · {entry.REGISTERED_BY}
-                  </span>
-                  <div className="flex gap-1">
-                    <span
-                      className={`text-sm font-bold ${
-                        entry.TYPE === "income"
-                          ? "text-success"
-                          : "text-destructive"
-                      }`}
-                    >
-                      {entry.TYPE === "income" ? "+" : "-"}
-                      {formatAmount(entry.AMOUNT)}
-                    </span>
-                    {isTreasurer && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => handleEdit(entry)}
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => handleDelete(entry.ID)}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
+                  {isTreasurer && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleEdit(entry)}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => handleDelete(entry.ID)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
-            ))}
+            </div>
+          ))}
+          {ledgerEntries.length === 0 && (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              해당 기간에 조회되는 거래 내역이 없습니다.
+            </div>
+          )}
         </div>
       </div>
     </div>
