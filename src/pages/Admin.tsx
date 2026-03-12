@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { USER_MAIN, NOTIFICATION } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,7 +26,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Users, Trash2, Bell, ArrowLeft } from "lucide-react";
+import {
+  Plus,
+  Users,
+  Trash2,
+  Bell,
+  ArrowLeft,
+  ChevronDown,
+} from "lucide-react";
 
 type ConfirmDialogState = {
   open: boolean;
@@ -60,6 +67,9 @@ const Admin = () => {
     title: "",
     content: "",
   });
+  const [expandedMonthSections, setExpandedMonthSections] = useState<
+    Record<string, boolean>
+  >({});
 
   const codeToLabel = (code: string): string => {
     const codeMap: { [key: string]: string } = {
@@ -437,6 +447,43 @@ const Admin = () => {
     });
   };
 
+  const notificationGroupsByMonth = useMemo(() => {
+    const grouped = new Map<string, NOTIFICATION[]>();
+
+    notifications.forEach((notification) => {
+      const createdAt = new Date(notification.CREATED_AT);
+      if (Number.isNaN(createdAt.getTime())) return;
+
+      const key = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, "0")}`;
+      const existing = grouped.get(key) || [];
+      existing.push(notification);
+      grouped.set(key, existing);
+    });
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([key, items]) => {
+        const [year, month] = key.split("-");
+
+        return {
+          key,
+          label: `${year}년 ${Number(month)}월`,
+          items: items.sort(
+            (a, b) =>
+              new Date(b.CREATED_AT).getTime() -
+              new Date(a.CREATED_AT).getTime(),
+          ),
+        };
+      });
+  }, [notifications]);
+
+  const toggleMonthSection = (monthKey: string, defaultExpanded: boolean) => {
+    setExpandedMonthSections((prev) => ({
+      ...prev,
+      [monthKey]: !(prev[monthKey] ?? defaultExpanded),
+    }));
+  };
+
   // 수정 모드
   if (isEditMode && selectedNotification) {
     return (
@@ -693,45 +740,77 @@ const Admin = () => {
         </Dialog>
       </div>
       {/* Notification List */}
-      <div className="space-y-2">
-        {notifications.map((notification) => (
-          <div
-            key={notification.ID}
-            className="card-classic p-4 hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => handleEditStart(notification)}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
-                  <Bell className="w-4.5 h-4.5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-medium text-sm mb-1">
-                    {notification.TITLE}
-                  </h4>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    {notification.CONTENT}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDateTime(notification.CREATED_AT)}
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteNotification(notification.ID);
-                }}
+      <div className="space-y-3">
+        {notificationGroupsByMonth.map((group, index) => {
+          const defaultExpanded = index === 0;
+          const isExpanded =
+            expandedMonthSections[group.key] ?? defaultExpanded;
+
+          return (
+            <div key={group.key} className="card-classic p-0 overflow-hidden">
+              <button
+                type="button"
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                onClick={() => toggleMonthSection(group.key, defaultExpanded)}
               >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+                <div className="flex items-center gap-2">
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${
+                      isExpanded ? "rotate-0" : "-rotate-90"
+                    }`}
+                  />
+                  <p className="text-sm font-medium">{group.label}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {group.items.length}개
+                </p>
+              </button>
+
+              {isExpanded && (
+                <div className="border-t border-border p-2 space-y-2">
+                  {group.items.map((notification) => (
+                    <div
+                      key={notification.ID}
+                      className="p-3 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => handleEditStart(notification)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+                            <Bell className="w-4.5 h-4.5 text-primary" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-sm mb-1">
+                              {notification.TITLE}
+                            </h4>
+                            <p className="text-xs text-muted-foreground mb-2">
+                              {notification.CONTENT}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDateTime(notification.CREATED_AT)}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteNotification(notification.ID);
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
-        {notifications.length === 0 && (
+          );
+        })}
+        {notificationGroupsByMonth.length === 0 && (
           <div className="text-center py-12 text-muted-foreground text-sm">
             등록된 공지사항이 없습니다.
           </div>

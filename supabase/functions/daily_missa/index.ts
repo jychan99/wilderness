@@ -49,6 +49,43 @@ const normalizeDateInput = (value: string): string | null => {
   return null;
 };
 
+const formatSentenceBreaksOutsideQuotes = (text: string): string => {
+  let inStraightDoubleQuote = false;
+  let inCurlyDoubleQuote = false;
+  let result = "";
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (char === '"') {
+      inStraightDoubleQuote = !inStraightDoubleQuote;
+      result += char;
+      continue;
+    }
+
+    if (char === "“") {
+      inCurlyDoubleQuote = true;
+      result += char;
+      continue;
+    }
+
+    if (char === "”") {
+      inCurlyDoubleQuote = false;
+      result += char;
+      continue;
+    }
+
+    if (char === "." && !inStraightDoubleQuote && !inCurlyDoubleQuote) {
+      result += ".\n";
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result.trim();
+};
+
 const getRawDateFromRequest = async (req: Request): Promise<string | null> => {
   const url = new URL(req.url);
   const queryDate = url.searchParams.get("date");
@@ -148,7 +185,8 @@ serve(async (req: Request) => {
         const sectionText = sectionRow.textContent?.replace(/\s+/g, " ").trim();
         if (!sectionText) continue;
 
-        const formattedSectionText = sectionText.replaceAll(".", ".\n").trim();
+        const formattedSectionText =
+          formatSentenceBreaksOutsideQuotes(sectionText);
         if (formattedSectionText) gospelSectionTexts.push(formattedSectionText);
       }
     }
