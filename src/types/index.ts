@@ -117,6 +117,46 @@ export interface USER_MANAGE_GRADE {
   MANAGE_GRADE: string;
 }
 
+//게시판 공통
+export interface BOARD {
+  ID: number;
+  BOARD_CODE: string;
+  USER_CODE: string;
+  CATEGORY: string;
+  TITLE: string;
+  CONTENT: string;
+  VIEW: number;
+  IS_DELETED: boolean;
+  IS_PINNED: boolean;
+  IS_ANNONYMOUS: boolean;
+  CREATED_AT: string; // ISO 날짜 문자열
+  UPDATED_AT: string; // ISO 날짜 문자열, 선택적
+}
+
+//게시글 좋아요
+export interface POST_LIKES {
+  POST_ID: number;
+  USER_CODE: string;
+  IS_LIKE: boolean;
+}
+
+//댓글
+export interface COMMENTS {
+  ID: number;
+  POST_ID: number;
+  USER_CODE: string;
+  PARENT_ID: number;
+  CONTENT: string;
+  CREATED_AT: string; // ISO 날짜 문자열
+}
+
+//댓글 좋아요
+export interface COMMENTS_LIKES {
+  COMMENT_ID: number;
+  USER_CODE: string;
+  IS_LIKE: boolean;
+}
+
 //CODE
 
 //학년코드

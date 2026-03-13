@@ -18,6 +18,10 @@ export const MENU_PERMISSIONS = {
     label: "공지사항",
     allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL
   },
+  freeboard: {
+    label: "자유게시판",
+    allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL
+  },
   students: {
     label: "학생관리",
     allowedPositions: ["0", "1", "2", "3", "4", "5"], // ALL

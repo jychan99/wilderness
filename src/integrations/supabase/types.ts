@@ -213,6 +213,110 @@ export type Database = {
           MANAGE_GRADE?: string;
         };
       };
+      BOARD: {
+        Row: {
+          ID: number;
+          BOARD_CODE: string;
+          USER_CODE: string;
+          CATEGORY: string;
+          TITLE: string;
+          CONTENT: string;
+          VIEW: number;
+          IS_DELETED: boolean;
+          IS_PINNED: boolean;
+          IS_ANNONYMOUS: boolean;
+          CREATED_AT: string;
+          UPDATED_AT: string;
+        };
+        Insert: {
+          ID: number;
+          BOARD_CODE: string;
+          USER_CODE: string;
+          CATEGORY: string;
+          TITLE: string;
+          CONTENT: string;
+          VIEW: number;
+          IS_DELETED: boolean;
+          IS_PINNED: boolean;
+          IS_ANNONYMOUS: boolean;
+          CREATED_AT: string;
+          UPDATED_AT: string;
+        };
+        Update: {
+          ID?: number;
+          BOARD_CODE?: string;
+          USER_CODE?: string;
+          CATEGORY?: string;
+          TITLE?: string;
+          CONTENT?: string;
+          VIEW?: number;
+          IS_DELETED?: boolean;
+          IS_PINNED?: boolean;
+          IS_ANNONYMOUS?: boolean;
+          CREATED_AT?: string;
+          UPDATED_AT?: string;
+        };
+      };
+      POST_LIKES: {
+        Row: {
+          POST_ID: number;
+          USER_CODE: string;
+          IS_LIKE: boolean;
+        };
+        Insert: {
+          POST_ID: number;
+          USER_CODE: string;
+          IS_LIKE: boolean;
+        };
+        Update: {
+          POST_ID?: number;
+          USER_CODE?: string;
+          IS_LIKE?: boolean;
+        };
+      };
+      COMMENTS: {
+        Row: {
+          ID: number;
+          POST_ID: number;
+          USER_CODE: string;
+          PARENT_ID: number;
+          CONTENT: string;
+          CREATED_AT: string;
+        };
+        Insert: {
+          ID: number;
+          POST_ID: number;
+          USER_CODE: string;
+          PARENT_ID: number;
+          CONTENT: string;
+          CREATED_AT: string;
+        };
+        Update: {
+          ID?: number;
+          POST_ID?: number;
+          USER_CODE?: string;
+          PARENT_ID?: number;
+          CONTENT?: string;
+          CREATED_AT?: string;
+        };
+      };
+      COMMENTS_LIKES: {
+        Row: {
+          COMMENT_ID: number;
+          USER_CODE: string;
+          IS_LIKE: boolean;
+        };
+        Insert: {
+          COMMENT_ID: number;
+          USER_CODE: string;
+          IS_LIKE: boolean;
+        };
+        Update: {
+          COMMENT_ID?: number;
+          USER_CODE?: string;
+          IS_LIKE?: boolean;
+        };
+      };
       GRADE_CODE: {
         Row: {
           CODE: string;

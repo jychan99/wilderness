@@ -10,6 +10,7 @@ import MeetingNotes from "@/pages/MeetingNotes";
 import Accounting from "@/pages/Accounting";
 import Admin from "@/pages/Admin";
 import Notification from "@/pages/Notification";
+import FreeBoard from "@/pages/FreeBoard";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -86,6 +87,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute menuKey="notifications">
               <Notification />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/freeboard"
+          element={
+            <ProtectedRoute menuKey="freeboard">
+              <FreeBoard />
             </ProtectedRoute>
           }
         />

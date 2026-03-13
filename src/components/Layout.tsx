@@ -28,6 +28,7 @@ import {
   Menu,
   X,
   Bell,
+  MessageSquareText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -98,6 +99,12 @@ const Layout = ({ children }: LayoutProps) => {
       label: "공지사항",
       icon: Bell,
       show: canAccessMenu(user.position, "notifications"),
+    },
+    {
+      id: "freeboard",
+      label: "자유게시판",
+      icon: MessageSquareText,
+      show: canAccessMenu(user.position, "freeboard"),
     },
     {
       id: "students",

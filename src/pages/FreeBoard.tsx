@@ -1,0 +1,1158 @@
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  BOARD,
+  COMMENTS_LIKES,
+  COMMENTS,
+  POST_LIKES,
+  USER_MAIN,
+} from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  MessageSquareText,
+  Plus,
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  Heart,
+} from "lucide-react";
+
+const FREE_BOARD_CODES = ["FREE_BOARD", "FREE"];
+const POSTS_PER_PAGE = 10;
+
+const FreeBoard = () => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [showWrite, setShowWrite] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<BOARD | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [commentInput, setCommentInput] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState("");
+
+  const [editForm, setEditForm] = useState({
+    title: "",
+    content: "",
+  });
+
+  const [form, setForm] = useState({
+    title: "",
+    content: "",
+  });
+
+  const { data: posts = [] } = useQuery<BOARD[], Error>({
+    queryKey: ["free_board_posts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("BOARD")
+        .select("*")
+        .in("BOARD_CODE", FREE_BOARD_CODES)
+        .eq("IS_DELETED", false)
+        .order("CREATED_AT", { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const postIds = useMemo(() => posts.map((post) => post.ID), [posts]);
+  const postIdsKey = useMemo(() => postIds.join(","), [postIds]);
+
+  const { data: comments = [] } = useQuery<COMMENTS[], Error>({
+    queryKey: ["free_board_comments", selectedPost?.ID],
+    enabled: Boolean(selectedPost?.ID),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("COMMENTS")
+        .select("*")
+        .eq("POST_ID", selectedPost!.ID)
+        .order("CREATED_AT", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const commentIds = useMemo(
+    () => comments.map((comment) => comment.ID),
+    [comments],
+  );
+  const commentIdsKey = useMemo(() => commentIds.join(","), [commentIds]);
+
+  const { data: allCommentsForCount = [] } = useQuery<
+    Pick<COMMENTS, "POST_ID">[],
+    Error
+  >({
+    queryKey: ["free_board_comment_counts", postIdsKey],
+    enabled: postIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("COMMENTS")
+        .select("POST_ID")
+        .in("POST_ID", postIds);
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: postLikes = [] } = useQuery<POST_LIKES[], Error>({
+    queryKey: ["free_board_post_likes", postIdsKey],
+    enabled: postIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("POST_LIKES")
+        .select("*")
+        .in("POST_ID", postIds);
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: commentLikes = [] } = useQuery<COMMENTS_LIKES[], Error>({
+    queryKey: ["free_board_COMMENTS_LIKES", selectedPost?.ID, commentIdsKey],
+    enabled: commentIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("COMMENTS_LIKES")
+        .select("*")
+        .in("COMMENT_ID", commentIds);
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const userCodes = useMemo(() => {
+    return Array.from(
+      new Set(
+        [
+          ...posts.map((post) => post.USER_CODE),
+          ...comments.map((comment) => comment.USER_CODE),
+        ].filter(Boolean),
+      ),
+    );
+  }, [posts, comments]);
+
+  const userCodesKey = useMemo(() => userCodes.join(","), [userCodes]);
+
+  const { data: users = [] } = useQuery<
+    Pick<USER_MAIN, "USER_CODE" | "NAME">[],
+    Error
+  >({
+    queryKey: ["free_board_users", userCodesKey],
+    enabled: userCodes.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("USER_MAIN")
+        .select("USER_CODE, NAME")
+        .in("USER_CODE", userCodes);
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const userNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    users.forEach((item) => {
+      map.set(item.USER_CODE, item.NAME);
+    });
+    return map;
+  }, [users]);
+
+  const commentCountMap = useMemo(() => {
+    const map = new Map<number, number>();
+    allCommentsForCount.forEach((row) => {
+      map.set(row.POST_ID, (map.get(row.POST_ID) || 0) + 1);
+    });
+    return map;
+  }, [allCommentsForCount]);
+
+  const postLikeCountMap = useMemo(() => {
+    const map = new Map<number, number>();
+    postLikes.forEach((like) => {
+      if (like.IS_LIKE) {
+        map.set(like.POST_ID, (map.get(like.POST_ID) || 0) + 1);
+      }
+    });
+    return map;
+  }, [postLikes]);
+
+  const likedPostSet = useMemo(() => {
+    const me = user?.USER_CODE;
+    return new Set(
+      postLikes
+        .filter((like) => like.USER_CODE === me && like.IS_LIKE)
+        .map((like) => Number(like.POST_ID)),
+    );
+  }, [postLikes, user?.USER_CODE]);
+
+  const commentLikeCountMap = useMemo(() => {
+    const map = new Map<number, number>();
+    commentLikes.forEach((like) => {
+      if (like.IS_LIKE) {
+        map.set(like.COMMENT_ID, (map.get(like.COMMENT_ID) || 0) + 1);
+      }
+    });
+    return map;
+  }, [commentLikes]);
+
+  const likedCommentSet = useMemo(() => {
+    const me = user?.USER_CODE;
+    return new Set(
+      commentLikes
+        .filter((like) => like.USER_CODE === me && like.IS_LIKE)
+        .map((like) => Number(like.COMMENT_ID)),
+    );
+  }, [commentLikes, user?.USER_CODE]);
+
+  const addPostMutation = useMutation({
+    mutationFn: async (payload: { title: string; content: string }) => {
+      const now = new Date().toISOString();
+      const newPost = {
+        BOARD_CODE: "FREE_BOARD",
+        USER_CODE: user?.USER_CODE,
+        CATEGORY: "자유게시판",
+        TITLE: payload.title,
+        CONTENT: payload.content,
+        VIEW: 0,
+        IS_DELETED: false,
+        IS_PINNED: false,
+        IS_ANNONYMOUS: false,
+        CREATED_AT: now,
+        UPDATED_AT: now,
+      };
+
+      const { error } = await (supabase as any).from("BOARD").insert([newPost]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["free_board_posts"] });
+      setForm({ title: "", content: "" });
+      setShowWrite(false);
+      toast({
+        title: "글 등록 완료",
+        description: "자유게시판에 글이 등록되었습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "글 등록 실패",
+        description: `등록 중 오류가 발생했습니다: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const increaseViewMutation = useMutation({
+    mutationFn: async (post: BOARD) => {
+      const { error } = await (supabase as any)
+        .from("BOARD")
+        .update({ VIEW: (post.VIEW || 0) + 1 })
+        .eq("ID", post.ID);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, post) => {
+      setSelectedPost((prev) =>
+        prev && prev.ID === post.ID
+          ? { ...prev, VIEW: (prev.VIEW || 0) + 1 }
+          : prev,
+      );
+      queryClient.invalidateQueries({ queryKey: ["free_board_posts"] });
+    },
+  });
+
+  const updatePostMutation = useMutation({
+    mutationFn: async (payload: {
+      postId: number;
+      title: string;
+      content: string;
+    }) => {
+      const { error } = await (supabase as any)
+        .from("BOARD")
+        .update({
+          TITLE: payload.title,
+          CONTENT: payload.content,
+          UPDATED_AT: new Date().toISOString(),
+        })
+        .eq("ID", payload.postId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["free_board_posts"] });
+      setSelectedPost((prev) =>
+        prev
+          ? {
+              ...prev,
+              TITLE: editForm.title,
+              CONTENT: editForm.content,
+              UPDATED_AT: new Date().toISOString(),
+            }
+          : prev,
+      );
+      setIsEditMode(false);
+      toast({
+        title: "글 수정 완료",
+        description: "게시글이 수정되었습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "글 수정 실패",
+        description: `수정 중 오류가 발생했습니다: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePostMutation = useMutation({
+    mutationFn: async (postId: number) => {
+      const { data: commentRows, error: commentSelectError } = await supabase
+        .from("COMMENTS")
+        .select("ID")
+        .eq("POST_ID", postId);
+      if (commentSelectError) throw commentSelectError;
+
+      const commentIdsToDelete = (commentRows || []).map((row: any) => row.ID);
+      if (commentIdsToDelete.length > 0) {
+        const { error: commentLikeError } = await supabase
+          .from("COMMENTS_LIKES")
+          .delete()
+          .in("COMMENT_ID", commentIdsToDelete);
+        if (commentLikeError) throw commentLikeError;
+      }
+
+      const { error: commentDeleteError } = await supabase
+        .from("COMMENTS")
+        .delete()
+        .eq("POST_ID", postId);
+      if (commentDeleteError) throw commentDeleteError;
+
+      const { error: postLikeError } = await supabase
+        .from("POST_LIKES")
+        .delete()
+        .eq("POST_ID", postId);
+      if (postLikeError) throw postLikeError;
+
+      const { error } = await supabase.from("BOARD").delete().eq("ID", postId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["free_board_posts"] });
+      queryClient.invalidateQueries({
+        queryKey: ["free_board_comment_counts"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["free_board_post_likes"] });
+      setSelectedPost(null);
+      setIsEditMode(false);
+      toast({
+        title: "글 삭제 완료",
+        description: "게시글이 삭제되었습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "글 삭제 실패",
+        description: `삭제 중 오류가 발생했습니다: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addCommentMutation = useMutation({
+    mutationFn: async (payload: { postId: number; content: string }) => {
+      const { error } = await (supabase as any).from("COMMENTS").insert([
+        {
+          POST_ID: payload.postId,
+          USER_CODE: user?.USER_CODE,
+          PARENT_ID: 0,
+          CONTENT: payload.content,
+          CREATED_AT: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["free_board_comments", selectedPost?.ID],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["free_board_comment_counts"],
+      });
+      setCommentInput("");
+      toast({
+        title: "댓글 등록 완료",
+        description: "댓글이 등록되었습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "댓글 등록 실패",
+        description: `댓글 등록 중 오류가 발생했습니다: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateCommentMutation = useMutation({
+    mutationFn: async (payload: { commentId: number; content: string }) => {
+      const { error } = await (supabase as any)
+        .from("COMMENTS")
+        .update({ CONTENT: payload.content })
+        .eq("ID", payload.commentId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["free_board_comments", selectedPost?.ID],
+      });
+      setEditingCommentId(null);
+      setEditingCommentContent("");
+      toast({
+        title: "댓글 수정 완료",
+        description: "댓글이 수정되었습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "댓글 수정 실패",
+        description: `댓글 수정 중 오류가 발생했습니다: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (payload: { commentId: number }) => {
+      const { error: likeError } = await supabase
+        .from("COMMENTS_LIKES")
+        .delete()
+        .eq("COMMENT_ID", payload.commentId);
+      if (likeError) throw likeError;
+
+      const { error } = await supabase
+        .from("COMMENTS")
+        .delete()
+        .eq("ID", payload.commentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["free_board_comments", selectedPost?.ID],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["free_board_comment_counts"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["free_board_COMMENTS_LIKES"],
+      });
+      toast({
+        title: "댓글 삭제 완료",
+        description: "댓글이 삭제되었습니다.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "댓글 삭제 실패",
+        description: `댓글 삭제 중 오류가 발생했습니다: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const likePostMutation = useMutation({
+    mutationFn: async (payload: { postId: number; isLiked: boolean }) => {
+      if (!user?.USER_CODE) {
+        throw new Error("사용자 정보가 없습니다.");
+      }
+
+      const { error } = await (supabase as any).from("POST_LIKES").upsert(
+        [
+          {
+            POST_ID: payload.postId,
+            USER_CODE: user.USER_CODE,
+            IS_LIKE: !payload.isLiked,
+          },
+        ],
+        { onConflict: "POST_ID,USER_CODE" },
+      );
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["free_board_post_likes"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "좋아요 실패",
+        description: `게시글 좋아요 처리 중 오류가 발생했습니다: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const likeCommentMutation = useMutation({
+    mutationFn: async (payload: { commentId: number; isLiked: boolean }) => {
+      if (!user?.USER_CODE) {
+        throw new Error("사용자 정보가 없습니다.");
+      }
+
+      const { data: existingRows, error: findError } = await (supabase as any)
+        .from("COMMENTS_LIKES")
+        .select("COMMENT_ID")
+        .eq("COMMENT_ID", payload.commentId)
+        .eq("USER_CODE", user.USER_CODE);
+      if (findError) throw findError;
+
+      const nextLikeState = !payload.isLiked;
+
+      if ((existingRows || []).length > 0) {
+        const { error: updateError } = await (supabase as any)
+          .from("COMMENTS_LIKES")
+          .update({ IS_LIKE: nextLikeState })
+          .eq("COMMENT_ID", payload.commentId)
+          .eq("USER_CODE", user.USER_CODE);
+        if (updateError) throw updateError;
+        return;
+      }
+
+      const { error: insertError } = await (supabase as any)
+        .from("COMMENTS_LIKES")
+        .insert([
+          {
+            COMMENT_ID: payload.commentId,
+            USER_CODE: user.USER_CODE,
+            IS_LIKE: true,
+          },
+        ]);
+      if (insertError) throw insertError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["free_board_COMMENTS_LIKES"],
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "좋아요 실패",
+        description: `댓글 좋아요 처리 중 오류가 발생했습니다: ${(error as Error).message}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleWrite = () => {
+    if (!form.title.trim() || !form.content.trim()) {
+      toast({
+        title: "입력 필요",
+        description: "제목과 내용을 모두 입력해주세요.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    addPostMutation.mutate({
+      title: form.title.trim(),
+      content: form.content.trim(),
+    });
+  };
+
+  const openPostDetail = (post: BOARD) => {
+    setSelectedPost(post);
+    setIsEditMode(false);
+    setEditingCommentId(null);
+    setEditingCommentContent("");
+    increaseViewMutation.mutate(post);
+  };
+
+  const handleEditStart = () => {
+    if (!selectedPost) return;
+    setEditForm({
+      title: selectedPost.TITLE,
+      content: selectedPost.CONTENT,
+    });
+    setIsEditMode(true);
+  };
+
+  const handleEditSave = () => {
+    if (!selectedPost || !editForm.title.trim() || !editForm.content.trim()) {
+      toast({
+        title: "입력 필요",
+        description: "제목과 내용을 모두 입력해주세요.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updatePostMutation.mutate({
+      postId: selectedPost.ID,
+      title: editForm.title.trim(),
+      content: editForm.content.trim(),
+    });
+  };
+
+  const handleDelete = () => {
+    if (!selectedPost) return;
+    if (!confirm("정말 삭제하시겠습니까?")) return;
+    deletePostMutation.mutate(selectedPost.ID);
+  };
+
+  const handleAddComment = () => {
+    if (!selectedPost || !commentInput.trim()) {
+      toast({
+        title: "입력 필요",
+        description: "댓글 내용을 입력해주세요.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    addCommentMutation.mutate({
+      postId: selectedPost.ID,
+      content: commentInput.trim(),
+    });
+  };
+
+  const handleCommentEditStart = (comment: COMMENTS) => {
+    setEditingCommentId(comment.ID);
+    setEditingCommentContent(comment.CONTENT);
+  };
+
+  const handleCommentEditCancel = () => {
+    setEditingCommentId(null);
+    setEditingCommentContent("");
+  };
+
+  const handleCommentEditSave = (comment: COMMENTS) => {
+    if (!editingCommentContent.trim()) {
+      toast({
+        title: "입력 필요",
+        description: "댓글 내용을 입력해주세요.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateCommentMutation.mutate({
+      commentId: comment.ID,
+      content: editingCommentContent.trim(),
+    });
+  };
+
+  const handleCommentDelete = (comment: COMMENTS) => {
+    if (!confirm("댓글을 삭제하시겠습니까?")) return;
+    deleteCommentMutation.mutate({ commentId: comment.ID });
+  };
+
+  const handleLikePost = (post: BOARD) => {
+    likePostMutation.mutate({
+      postId: post.ID,
+      isLiked: isPostLikedByMe(post.ID),
+    });
+  };
+
+  const handleLikeComment = (comment: COMMENTS) => {
+    likeCommentMutation.mutate({
+      commentId: comment.ID,
+      isLiked: isCommentLikedByMe(comment.ID),
+    });
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString("ko-KR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const filteredPosts = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    if (!keyword) return posts;
+
+    return posts.filter((post) => {
+      const title = (post.TITLE || "").toLowerCase();
+      const content = (post.CONTENT || "").toLowerCase();
+      const author = (userNameMap.get(post.USER_CODE) || "").toLowerCase();
+      return (
+        title.includes(keyword) ||
+        content.includes(keyword) ||
+        author.includes(keyword)
+      );
+    });
+  }, [posts, searchText, userNameMap]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredPosts.length / POSTS_PER_PAGE),
+  );
+
+  const pagedPosts = useMemo(() => {
+    const start = (currentPage - 1) * POSTS_PER_PAGE;
+    return filteredPosts.slice(start, start + POSTS_PER_PAGE);
+  }, [filteredPosts, currentPage]);
+
+  const pageNumbers = useMemo(() => {
+    const pages: number[] = [];
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, start + 4);
+
+    for (let page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchText]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const postCountText = useMemo(() => {
+    if (!searchText.trim()) return `총 ${posts.length}건`;
+    return `검색 ${filteredPosts.length}건 (전체 ${posts.length}건)`;
+  }, [posts.length, filteredPosts.length, searchText]);
+
+  const canEditDelete =
+    !!selectedPost &&
+    (user?.role === "admin" || user?.USER_CODE === selectedPost.USER_CODE);
+
+  const canManageComment = (comment: COMMENTS) => {
+    return user?.role === "admin" || user?.USER_CODE === comment.USER_CODE;
+  };
+
+  const isPostLikedByMe = (postId: number) => likedPostSet.has(postId);
+  const isCommentLikedByMe = (commentId: number) =>
+    likedCommentSet.has(commentId);
+
+  if (!user) return null;
+
+  if (selectedPost && isEditMode) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => setIsEditMode(false)}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          취소
+        </Button>
+        <div className="card-classic p-6">
+          <h2 className="font-heading text-xl font-bold mb-4">게시글 수정</h2>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>제목</Label>
+              <Input
+                value={editForm.title}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, title: e.target.value })
+                }
+                placeholder="제목을 입력하세요"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>내용</Label>
+              <Textarea
+                value={editForm.content}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, content: e.target.value })
+                }
+                placeholder="내용을 입력하세요"
+                className="min-h-[220px]"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleEditSave}
+                className="flex-1"
+                disabled={updatePostMutation.isPending}
+              >
+                {updatePostMutation.isPending ? "저장 중..." : "저장"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsEditMode(false)}
+                className="flex-1"
+              >
+                취소
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedPost) {
+    const selectedPostAuthor =
+      userNameMap.get(selectedPost.USER_CODE) || "사용자";
+    const selectedPostLikeCount = postLikeCountMap.get(selectedPost.ID) || 0;
+    const selectedPostLikedByMe = isPostLikedByMe(selectedPost.ID);
+
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => setSelectedPost(null)}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          목록으로
+        </Button>
+
+        <div className="card-classic p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex-1">
+              <h2 className="font-heading text-xl font-bold mb-2">
+                {selectedPost.TITLE}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {selectedPostAuthor} · {formatDateTime(selectedPost.CREATED_AT)}{" "}
+                · 조회 {selectedPost.VIEW}
+              </p>
+              <div className="mt-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={selectedPostLikedByMe ? "default" : "outline"}
+                  className="h-8 px-2.5"
+                  onClick={() => handleLikePost(selectedPost)}
+                  disabled={likePostMutation.isPending}
+                >
+                  <Heart
+                    className={`w-3.5 h-3.5 mr-1.5 ${selectedPostLikedByMe ? "fill-current" : ""}`}
+                  />
+                  {selectedPostLikedByMe ? "취소" : ""} {selectedPostLikeCount}
+                </Button>
+              </div>
+            </div>
+
+            {canEditDelete && (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleEditStart}>
+                  <Pencil className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={handleDelete}
+                  disabled={deletePostMutation.isPending}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <hr className="my-4" />
+          <div className="whitespace-pre-wrap text-sm leading-relaxed mb-6">
+            {selectedPost.CONTENT}
+          </div>
+
+          <div className="space-y-3 border-t border-border pt-4">
+            <h3 className="font-heading font-semibold text-sm">댓글</h3>
+            <div className="space-y-2">
+              <Textarea
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
+                placeholder="댓글을 입력하세요"
+                className="min-h-[100px]"
+              />
+              <Button
+                onClick={handleAddComment}
+                disabled={addCommentMutation.isPending}
+              >
+                {addCommentMutation.isPending ? "등록 중..." : "댓글 등록"}
+              </Button>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {comments.map((comment) => {
+                const commentAuthor =
+                  userNameMap.get(comment.USER_CODE) || "사용자";
+                const commentLikeCount =
+                  commentLikeCountMap.get(comment.ID) || 0;
+                const commentLikedByMe = isCommentLikedByMe(comment.ID);
+
+                return (
+                  <div key={comment.ID} className="p-3 rounded-lg bg-muted/30">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-xs text-muted-foreground">
+                        {commentAuthor} · {formatDateTime(comment.CREATED_AT)}
+                      </p>
+
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-7 px-2 text-xs ${commentLikedByMe ? "text-rose-600 hover:text-rose-600" : ""}`}
+                          onClick={() => handleLikeComment(comment)}
+                          disabled={likeCommentMutation.isPending}
+                        >
+                          <Heart
+                            className={`w-3 h-3 mr-1 ${commentLikedByMe ? "fill-current" : ""}`}
+                          />
+                          {commentLikeCount}
+                        </Button>
+
+                        {canManageComment(comment) && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => handleCommentEditStart(comment)}
+                            >
+                              수정
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-destructive"
+                              onClick={() => handleCommentDelete(comment)}
+                              disabled={deleteCommentMutation.isPending}
+                            >
+                              삭제
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {editingCommentId === comment.ID ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editingCommentContent}
+                          onChange={(e) =>
+                            setEditingCommentContent(e.target.value)
+                          }
+                          className="min-h-[90px]"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleCommentEditSave(comment)}
+                            disabled={updateCommentMutation.isPending}
+                          >
+                            {updateCommentMutation.isPending
+                              ? "저장 중..."
+                              : "저장"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCommentEditCancel}
+                          >
+                            취소
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">
+                        {comment.CONTENT}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+
+              {comments.length === 0 && (
+                <p className="text-sm text-muted-foreground py-2">
+                  아직 댓글이 없습니다.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">
+            {searchText.trim()
+              ? `검색 ${filteredPosts.length}건 (전체 ${posts.length}건)`
+              : `총 ${posts.length}건`}
+          </p>
+          <div className="w-full sm:w-72">
+            <Input
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="제목, 내용, 작성자 검색"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <Dialog open={showWrite} onOpenChange={setShowWrite}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="w-4 h-4 mr-1.5" />
+                글쓰기
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle className="font-heading">
+                  자유게시판 글쓰기
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label>제목</Label>
+                  <Input
+                    value={form.title}
+                    onChange={(e) =>
+                      setForm({ ...form, title: e.target.value })
+                    }
+                    placeholder="제목을 입력하세요"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>내용</Label>
+                  <Textarea
+                    value={form.content}
+                    onChange={(e) =>
+                      setForm({ ...form, content: e.target.value })
+                    }
+                    placeholder="내용을 입력하세요"
+                    className="min-h-[220px]"
+                  />
+                </div>
+                <Button
+                  onClick={handleWrite}
+                  className="w-full"
+                  disabled={addPostMutation.isPending}
+                >
+                  {addPostMutation.isPending ? "등록 중..." : "등록"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {pagedPosts.map((post) => {
+          const authorName = userNameMap.get(post.USER_CODE) || "사용자";
+          const commentCount = commentCountMap.get(post.ID) || 0;
+          const likeCount = postLikeCountMap.get(post.ID) || 0;
+
+          return (
+            <button
+              type="button"
+              key={post.ID}
+              className="w-full text-left card-classic p-4 hover:shadow-md transition-shadow"
+              onClick={() => openPostDetail(post)}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+                  <MessageSquareText className="w-4.5 h-4.5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3 mb-1">
+                    <h3 className="font-medium text-sm break-words">
+                      {post.TITLE} ({commentCount})
+                    </h3>
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                      <Heart className="w-3.5 h-3.5" />
+                      {likeCount}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-3 mb-2">
+                    {post.CONTENT}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {authorName} · {formatDateTime(post.CREATED_AT)} · 조회{" "}
+                    {post.VIEW}
+                  </p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+
+        {pagedPosts.length === 0 && (
+          <div className="card-classic p-8 text-center">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <MessageSquareText className="w-6 h-6 text-primary" />
+            </div>
+            <h2 className="font-heading text-xl font-bold mb-2">
+              {searchText.trim()
+                ? "검색 결과가 없습니다"
+                : "첫 글을 작성해보세요"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {searchText.trim()
+                ? "다른 검색어로 다시 시도해보세요."
+                : "아직 등록된 글이 없습니다. 우측 상단의 글쓰기 버튼으로 시작할 수 있습니다."}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {filteredPosts.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1.5 pt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            이전
+          </Button>
+          {pageNumbers.map((page) => (
+            <Button
+              key={page}
+              size="sm"
+              variant={page === currentPage ? "default" : "outline"}
+              onClick={() => setCurrentPage(page)}
+            >
+              {page}
+            </Button>
+          ))}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+            }
+            disabled={currentPage === totalPages}
+          >
+            다음
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default FreeBoard;
