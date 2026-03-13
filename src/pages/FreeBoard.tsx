@@ -46,6 +46,10 @@ const FreeBoard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState("");
+  const [replyTargetCommentId, setReplyTargetCommentId] = useState<
+    number | null
+  >(null);
+  const [replyInput, setReplyInput] = useState("");
 
   const [editForm, setEditForm] = useState({
     title: "",
@@ -288,6 +292,10 @@ const FreeBoard = () => {
       title: string;
       content: string;
     }) => {
+      if (!user?.USER_CODE) {
+        throw new Error("사용자 정보가 없습니다.");
+      }
+
       const { error } = await (supabase as any)
         .from("BOARD")
         .update({
@@ -295,7 +303,8 @@ const FreeBoard = () => {
           CONTENT: payload.content,
           UPDATED_AT: new Date().toISOString(),
         })
-        .eq("ID", payload.postId);
+        .eq("ID", payload.postId)
+        .eq("USER_CODE", user.USER_CODE);
 
       if (error) throw error;
     },
@@ -328,6 +337,21 @@ const FreeBoard = () => {
 
   const deletePostMutation = useMutation({
     mutationFn: async (postId: number) => {
+      if (!user?.USER_CODE) {
+        throw new Error("사용자 정보가 없습니다.");
+      }
+
+      const { data: targetPost, error: targetPostError } = await supabase
+        .from("BOARD")
+        .select("ID")
+        .eq("ID", postId)
+        .eq("USER_CODE", user.USER_CODE)
+        .maybeSingle();
+      if (targetPostError) throw targetPostError;
+      if (!targetPost) {
+        throw new Error("본인이 작성한 게시글만 삭제할 수 있습니다.");
+      }
+
       const { data: commentRows, error: commentSelectError } = await supabase
         .from("COMMENTS")
         .select("ID")
@@ -355,7 +379,11 @@ const FreeBoard = () => {
         .eq("POST_ID", postId);
       if (postLikeError) throw postLikeError;
 
-      const { error } = await supabase.from("BOARD").delete().eq("ID", postId);
+      const { error } = await supabase
+        .from("BOARD")
+        .delete()
+        .eq("ID", postId)
+        .eq("USER_CODE", user.USER_CODE);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -381,12 +409,16 @@ const FreeBoard = () => {
   });
 
   const addCommentMutation = useMutation({
-    mutationFn: async (payload: { postId: number; content: string }) => {
+    mutationFn: async (payload: {
+      postId: number;
+      content: string;
+      parentId?: number;
+    }) => {
       const { error } = await (supabase as any).from("COMMENTS").insert([
         {
           POST_ID: payload.postId,
           USER_CODE: user?.USER_CODE,
-          PARENT_ID: 0,
+          PARENT_ID: payload.parentId ?? 0,
           CONTENT: payload.content,
           CREATED_AT: new Date().toISOString(),
         },
@@ -402,6 +434,8 @@ const FreeBoard = () => {
         queryKey: ["free_board_comment_counts"],
       });
       setCommentInput("");
+      setReplyTargetCommentId(null);
+      setReplyInput("");
       toast({
         title: "댓글 등록 완료",
         description: "댓글이 등록되었습니다.",
@@ -418,10 +452,15 @@ const FreeBoard = () => {
 
   const updateCommentMutation = useMutation({
     mutationFn: async (payload: { commentId: number; content: string }) => {
+      if (!user?.USER_CODE) {
+        throw new Error("사용자 정보가 없습니다.");
+      }
+
       const { error } = await (supabase as any)
         .from("COMMENTS")
         .update({ CONTENT: payload.content })
-        .eq("ID", payload.commentId);
+        .eq("ID", payload.commentId)
+        .eq("USER_CODE", user.USER_CODE);
 
       if (error) throw error;
     },
@@ -447,6 +486,21 @@ const FreeBoard = () => {
 
   const deleteCommentMutation = useMutation({
     mutationFn: async (payload: { commentId: number }) => {
+      if (!user?.USER_CODE) {
+        throw new Error("사용자 정보가 없습니다.");
+      }
+
+      const { data: targetComment, error: targetCommentError } = await supabase
+        .from("COMMENTS")
+        .select("ID")
+        .eq("ID", payload.commentId)
+        .eq("USER_CODE", user.USER_CODE)
+        .maybeSingle();
+      if (targetCommentError) throw targetCommentError;
+      if (!targetComment) {
+        throw new Error("본인이 작성한 댓글만 삭제할 수 있습니다.");
+      }
+
       const { error: likeError } = await supabase
         .from("COMMENTS_LIKES")
         .delete()
@@ -456,7 +510,8 @@ const FreeBoard = () => {
       const { error } = await supabase
         .from("COMMENTS")
         .delete()
-        .eq("ID", payload.commentId);
+        .eq("ID", payload.commentId)
+        .eq("USER_CODE", user.USER_CODE);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -585,11 +640,22 @@ const FreeBoard = () => {
     setIsEditMode(false);
     setEditingCommentId(null);
     setEditingCommentContent("");
+    setReplyTargetCommentId(null);
+    setReplyInput("");
     increaseViewMutation.mutate(post);
   };
 
   const handleEditStart = () => {
     if (!selectedPost) return;
+    if (user?.USER_CODE !== selectedPost.USER_CODE) {
+      toast({
+        title: "권한 없음",
+        description: "본인이 작성한 게시글만 수정할 수 있습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setEditForm({
       title: selectedPost.TITLE,
       content: selectedPost.CONTENT,
@@ -616,6 +682,15 @@ const FreeBoard = () => {
 
   const handleDelete = () => {
     if (!selectedPost) return;
+    if (user?.USER_CODE !== selectedPost.USER_CODE) {
+      toast({
+        title: "권한 없음",
+        description: "본인이 작성한 게시글만 삭제할 수 있습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!confirm("정말 삭제하시겠습니까?")) return;
     deletePostMutation.mutate(selectedPost.ID);
   };
@@ -633,10 +708,49 @@ const FreeBoard = () => {
     addCommentMutation.mutate({
       postId: selectedPost.ID,
       content: commentInput.trim(),
+      parentId: 0,
+    });
+  };
+
+  const handleReplyStart = (comment: COMMENTS) => {
+    const rootCommentId =
+      comment.PARENT_ID === 0 ? comment.ID : comment.PARENT_ID;
+    setReplyTargetCommentId(rootCommentId);
+    setReplyInput("");
+  };
+
+  const handleReplyCancel = () => {
+    setReplyTargetCommentId(null);
+    setReplyInput("");
+  };
+
+  const handleAddReply = (parentCommentId: number) => {
+    if (!selectedPost || !replyInput.trim()) {
+      toast({
+        title: "입력 필요",
+        description: "대댓글 내용을 입력해주세요.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    addCommentMutation.mutate({
+      postId: selectedPost.ID,
+      content: replyInput.trim(),
+      parentId: parentCommentId,
     });
   };
 
   const handleCommentEditStart = (comment: COMMENTS) => {
+    if (user?.USER_CODE !== comment.USER_CODE) {
+      toast({
+        title: "권한 없음",
+        description: "본인이 작성한 댓글만 수정할 수 있습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setEditingCommentId(comment.ID);
     setEditingCommentContent(comment.CONTENT);
   };
@@ -663,6 +777,15 @@ const FreeBoard = () => {
   };
 
   const handleCommentDelete = (comment: COMMENTS) => {
+    if (user?.USER_CODE !== comment.USER_CODE) {
+      toast({
+        title: "권한 없음",
+        description: "본인이 작성한 댓글만 삭제할 수 있습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!confirm("댓글을 삭제하시겠습니까?")) return;
     deleteCommentMutation.mutate({ commentId: comment.ID });
   };
@@ -745,16 +868,32 @@ const FreeBoard = () => {
   }, [posts.length, filteredPosts.length, searchText]);
 
   const canEditDelete =
-    !!selectedPost &&
-    (user?.role === "admin" || user?.USER_CODE === selectedPost.USER_CODE);
+    !!selectedPost && user?.USER_CODE === selectedPost.USER_CODE;
 
   const canManageComment = (comment: COMMENTS) => {
-    return user?.role === "admin" || user?.USER_CODE === comment.USER_CODE;
+    return user?.USER_CODE === comment.USER_CODE;
   };
 
   const isPostLikedByMe = (postId: number) => likedPostSet.has(postId);
   const isCommentLikedByMe = (commentId: number) =>
     likedCommentSet.has(commentId);
+
+  const rootComments = useMemo(
+    () => comments.filter((comment) => comment.PARENT_ID === 0),
+    [comments],
+  );
+
+  const replyMap = useMemo(() => {
+    const map = new Map<number, COMMENTS[]>();
+    comments.forEach((comment) => {
+      if (comment.PARENT_ID !== 0) {
+        const current = map.get(comment.PARENT_ID) || [];
+        current.push(comment);
+        map.set(comment.PARENT_ID, current);
+      }
+    });
+    return map;
+  }, [comments]);
 
   if (!user) return null;
 
@@ -892,96 +1031,236 @@ const FreeBoard = () => {
             </div>
 
             <div className="space-y-2 pt-1">
-              {comments.map((comment) => {
+              {rootComments.map((comment) => {
                 const commentAuthor =
                   userNameMap.get(comment.USER_CODE) || "사용자";
                 const commentLikeCount =
                   commentLikeCountMap.get(comment.ID) || 0;
                 const commentLikedByMe = isCommentLikedByMe(comment.ID);
+                const replies = replyMap.get(comment.ID) || [];
 
                 return (
-                  <div key={comment.ID} className="p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <p className="text-xs text-muted-foreground">
-                        {commentAuthor} · {formatDateTime(comment.CREATED_AT)}
-                      </p>
+                  <div key={comment.ID} className="space-y-2">
+                    <div className="p-3 rounded-lg bg-muted/30">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs text-muted-foreground">
+                            {commentAuthor} ·{" "}
+                            {formatDateTime(comment.CREATED_AT)}
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1 text-xs text-muted-foreground"
+                            onClick={() => handleReplyStart(comment)}
+                          >
+                            대댓글 달기
+                          </Button>
+                        </div>
 
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`h-7 px-2 text-xs ${commentLikedByMe ? "text-rose-600 hover:text-rose-600" : ""}`}
-                          onClick={() => handleLikeComment(comment)}
-                          disabled={likeCommentMutation.isPending}
-                        >
-                          <Heart
-                            className={`w-3 h-3 mr-1 ${commentLikedByMe ? "fill-current" : ""}`}
-                          />
-                          {commentLikeCount}
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`h-7 px-2 text-xs ${commentLikedByMe ? "text-rose-600 hover:text-rose-600" : ""}`}
+                            onClick={() => handleLikeComment(comment)}
+                            disabled={likeCommentMutation.isPending}
+                          >
+                            <Heart
+                              className={`w-3 h-3 mr-1 ${commentLikedByMe ? "fill-current" : ""}`}
+                            />
+                            {commentLikeCount}
+                          </Button>
 
-                        {canManageComment(comment) && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => handleCommentEditStart(comment)}
-                            >
-                              수정
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs text-destructive"
-                              onClick={() => handleCommentDelete(comment)}
-                              disabled={deleteCommentMutation.isPending}
-                            >
-                              삭제
-                            </Button>
-                          </>
-                        )}
+                          {canManageComment(comment) && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => handleCommentEditStart(comment)}
+                              >
+                                수정
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-destructive"
+                                onClick={() => handleCommentDelete(comment)}
+                                disabled={deleteCommentMutation.isPending}
+                              >
+                                삭제
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
+
+                      {editingCommentId === comment.ID ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            value={editingCommentContent}
+                            onChange={(e) =>
+                              setEditingCommentContent(e.target.value)
+                            }
+                            className="min-h-[90px]"
+                          />
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleCommentEditSave(comment)}
+                              disabled={updateCommentMutation.isPending}
+                            >
+                              {updateCommentMutation.isPending
+                                ? "저장 중..."
+                                : "저장"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleCommentEditCancel}
+                            >
+                              취소
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">
+                          {comment.CONTENT}
+                        </p>
+                      )}
                     </div>
 
-                    {editingCommentId === comment.ID ? (
-                      <div className="space-y-2">
+                    {replies.map((reply) => {
+                      const replyAuthor =
+                        userNameMap.get(reply.USER_CODE) || "사용자";
+                      const replyLikeCount =
+                        commentLikeCountMap.get(reply.ID) || 0;
+                      const replyLikedByMe = isCommentLikedByMe(reply.ID);
+
+                      return (
+                        <div
+                          key={reply.ID}
+                          className="ml-4 p-3 rounded-lg border border-border bg-background"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                {replyAuthor} ·{" "}
+                                {formatDateTime(reply.CREATED_AT)}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={`h-7 px-2 text-xs ${replyLikedByMe ? "text-rose-600 hover:text-rose-600" : ""}`}
+                                onClick={() => handleLikeComment(reply)}
+                                disabled={likeCommentMutation.isPending}
+                              >
+                                <Heart
+                                  className={`w-3 h-3 mr-1 ${replyLikedByMe ? "fill-current" : ""}`}
+                                />
+                                {replyLikeCount}
+                              </Button>
+
+                              {canManageComment(reply) && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={() =>
+                                      handleCommentEditStart(reply)
+                                    }
+                                  >
+                                    수정
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs text-destructive"
+                                    onClick={() => handleCommentDelete(reply)}
+                                    disabled={deleteCommentMutation.isPending}
+                                  >
+                                    삭제
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {editingCommentId === reply.ID ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editingCommentContent}
+                                onChange={(e) =>
+                                  setEditingCommentContent(e.target.value)
+                                }
+                                className="min-h-[90px]"
+                              />
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleCommentEditSave(reply)}
+                                  disabled={updateCommentMutation.isPending}
+                                >
+                                  {updateCommentMutation.isPending
+                                    ? "저장 중..."
+                                    : "저장"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleCommentEditCancel}
+                                >
+                                  취소
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm whitespace-pre-wrap">
+                              {reply.CONTENT}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {replyTargetCommentId === comment.ID && (
+                      <div className="ml-4 space-y-2 rounded-lg border border-border bg-background p-3">
                         <Textarea
-                          value={editingCommentContent}
-                          onChange={(e) =>
-                            setEditingCommentContent(e.target.value)
-                          }
+                          value={replyInput}
+                          onChange={(e) => setReplyInput(e.target.value)}
+                          placeholder="대댓글을 입력하세요"
                           className="min-h-[90px]"
                         />
                         <div className="flex items-center gap-2">
                           <Button
                             size="sm"
-                            onClick={() => handleCommentEditSave(comment)}
-                            disabled={updateCommentMutation.isPending}
+                            onClick={() => handleAddReply(comment.ID)}
+                            disabled={addCommentMutation.isPending}
                           >
-                            {updateCommentMutation.isPending
-                              ? "저장 중..."
-                              : "저장"}
+                            {addCommentMutation.isPending
+                              ? "등록 중..."
+                              : "등록"}
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={handleCommentEditCancel}
+                            onClick={handleReplyCancel}
                           >
                             취소
                           </Button>
                         </div>
                       </div>
-                    ) : (
-                      <p className="text-sm whitespace-pre-wrap">
-                        {comment.CONTENT}
-                      </p>
                     )}
                   </div>
                 );
               })}
 
-              {comments.length === 0 && (
+              {rootComments.length === 0 && (
                 <p className="text-sm text-muted-foreground py-2">
                   아직 댓글이 없습니다.
                 </p>
