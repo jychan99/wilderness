@@ -11,16 +11,10 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   MessageSquareText,
   Plus,
@@ -38,7 +32,7 @@ const FreeBoard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [showWrite, setShowWrite] = useState(false);
+  const [isWriteMode, setIsWriteMode] = useState(false);
   const [selectedPost, setSelectedPost] = useState<BOARD | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [commentInput, setCommentInput] = useState("");
@@ -59,7 +53,19 @@ const FreeBoard = () => {
   const [form, setForm] = useState({
     title: "",
     content: "",
+    isAnonymous: false,
+    isPinned: false,
   });
+
+  const canPinPost = useMemo(() => {
+    if (!user) return false;
+    return (
+      user.position === "0" ||
+      user.position === "1" ||
+      user.position === "관리자" ||
+      user.position === "회장"
+    );
+  }, [user]);
 
   const { data: posts = [] } = useQuery<BOARD[], Error>({
     queryKey: ["free_board_posts"],
@@ -69,6 +75,7 @@ const FreeBoard = () => {
         .select("*")
         .in("BOARD_CODE", FREE_BOARD_CODES)
         .eq("IS_DELETED", false)
+        .order("IS_PINNED", { ascending: false })
         .order("CREATED_AT", { ascending: false });
 
       if (error) throw error;
@@ -230,7 +237,12 @@ const FreeBoard = () => {
   }, [commentLikes, user?.USER_CODE]);
 
   const addPostMutation = useMutation({
-    mutationFn: async (payload: { title: string; content: string }) => {
+    mutationFn: async (payload: {
+      title: string;
+      content: string;
+      isAnonymous: boolean;
+      isPinned: boolean;
+    }) => {
       const now = new Date().toISOString();
       const newPost = {
         BOARD_CODE: "FREE_BOARD",
@@ -240,8 +252,8 @@ const FreeBoard = () => {
         CONTENT: payload.content,
         VIEW: 0,
         IS_DELETED: false,
-        IS_PINNED: false,
-        IS_ANNONYMOUS: false,
+        IS_PINNED: payload.isPinned,
+        IS_ANNONYMOUS: payload.isAnonymous,
         CREATED_AT: now,
         UPDATED_AT: now,
       };
@@ -251,8 +263,8 @@ const FreeBoard = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["free_board_posts"] });
-      setForm({ title: "", content: "" });
-      setShowWrite(false);
+      setForm({ title: "", content: "", isAnonymous: false, isPinned: false });
+      setIsWriteMode(false);
       toast({
         title: "글 등록 완료",
         description: "자유게시판에 글이 등록되었습니다.",
@@ -632,7 +644,19 @@ const FreeBoard = () => {
     addPostMutation.mutate({
       title: form.title.trim(),
       content: form.content.trim(),
+      isAnonymous: form.isAnonymous,
+      isPinned: canPinPost ? form.isPinned : false,
     });
+  };
+
+  const handleWriteCancel = () => {
+    setForm({ title: "", content: "", isAnonymous: false, isPinned: false });
+    setIsWriteMode(false);
+  };
+
+  const getPostAuthorName = (post: BOARD) => {
+    if (post.IS_ANNONYMOUS) return "익명";
+    return userNameMap.get(post.USER_CODE) || "사용자";
   };
 
   const openPostDetail = (post: BOARD) => {
@@ -814,6 +838,14 @@ const FreeBoard = () => {
     });
   };
 
+  const formatDateOnly = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("ko-KR", {
+      year: "2-digit",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  };
+
   const filteredPosts = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
     if (!keyword) return posts;
@@ -821,7 +853,9 @@ const FreeBoard = () => {
     return posts.filter((post) => {
       const title = (post.TITLE || "").toLowerCase();
       const content = (post.CONTENT || "").toLowerCase();
-      const author = (userNameMap.get(post.USER_CODE) || "").toLowerCase();
+      const author = (
+        post.IS_ANNONYMOUS ? "익명" : userNameMap.get(post.USER_CODE) || ""
+      ).toLowerCase();
       return (
         title.includes(keyword) ||
         content.includes(keyword) ||
@@ -897,6 +931,92 @@ const FreeBoard = () => {
 
   if (!user) return null;
 
+  if (isWriteMode) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={handleWriteCancel}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          목록으로
+        </Button>
+
+        <div className="card-classic p-6">
+          <h2 className="font-heading text-xl font-bold mb-4">
+            자유게시판 글쓰기
+          </h2>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>제목</Label>
+              <Input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="제목을 입력하세요"
+              />
+            </div>
+            <div className="flex items-center gap-5 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="freeboard-anonymous"
+                  checked={form.isAnonymous}
+                  onCheckedChange={(checked) =>
+                    setForm({
+                      ...form,
+                      isAnonymous: checked === true,
+                    })
+                  }
+                />
+                <Label htmlFor="freeboard-anonymous" className="cursor-pointer">
+                  익명으로 작성
+                </Label>
+              </div>
+              {canPinPost && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="freeboard-pinned"
+                    checked={form.isPinned}
+                    onCheckedChange={(checked) =>
+                      setForm({
+                        ...form,
+                        isPinned: checked === true,
+                      })
+                    }
+                  />
+                  <Label htmlFor="freeboard-pinned" className="cursor-pointer">
+                    상단고정
+                  </Label>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>내용</Label>
+              <Textarea
+                value={form.content}
+                onChange={(e) => setForm({ ...form, content: e.target.value })}
+                placeholder="내용을 입력하세요"
+                className="min-h-[260px]"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleWrite}
+                className="flex-1"
+                disabled={addPostMutation.isPending}
+              >
+                {addPostMutation.isPending ? "등록 중..." : "등록"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleWriteCancel}
+                className="flex-1"
+              >
+                취소
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (selectedPost && isEditMode) {
     return (
       <div className="space-y-4">
@@ -951,8 +1071,7 @@ const FreeBoard = () => {
   }
 
   if (selectedPost) {
-    const selectedPostAuthor =
-      userNameMap.get(selectedPost.USER_CODE) || "사용자";
+    const selectedPostAuthor = getPostAuthorName(selectedPost);
     const selectedPostLikeCount = postLikeCountMap.get(selectedPost.ID) || 0;
     const selectedPostLikedByMe = isPostLikedByMe(selectedPost.ID);
 
@@ -1276,11 +1395,7 @@ const FreeBoard = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm text-muted-foreground">
-            {searchText.trim()
-              ? `검색 ${filteredPosts.length}건 (전체 ${posts.length}건)`
-              : `총 ${posts.length}건`}
-          </p>
+          <p className="text-sm text-muted-foreground">{postCountText}</p>
           <div className="w-full sm:w-72">
             <Input
               value={searchText}
@@ -1291,111 +1406,149 @@ const FreeBoard = () => {
         </div>
 
         <div className="flex justify-end">
-          <Dialog open={showWrite} onOpenChange={setShowWrite}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="w-4 h-4 mr-1.5" />
-                글쓰기
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-xl">
-              <DialogHeader>
-                <DialogTitle className="font-heading">
-                  자유게시판 글쓰기
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-1.5">
-                  <Label>제목</Label>
-                  <Input
-                    value={form.title}
-                    onChange={(e) =>
-                      setForm({ ...form, title: e.target.value })
-                    }
-                    placeholder="제목을 입력하세요"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>내용</Label>
-                  <Textarea
-                    value={form.content}
-                    onChange={(e) =>
-                      setForm({ ...form, content: e.target.value })
-                    }
-                    placeholder="내용을 입력하세요"
-                    className="min-h-[220px]"
-                  />
-                </div>
-                <Button
-                  onClick={handleWrite}
-                  className="w-full"
-                  disabled={addPostMutation.isPending}
-                >
-                  {addPostMutation.isPending ? "등록 중..." : "등록"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button size="sm" onClick={() => setIsWriteMode(true)}>
+            <Plus className="w-4 h-4 mr-1.5" />
+            글쓰기
+          </Button>
         </div>
       </div>
 
-      <div className="space-y-2">
-        {pagedPosts.map((post) => {
-          const authorName = userNameMap.get(post.USER_CODE) || "사용자";
-          const commentCount = commentCountMap.get(post.ID) || 0;
-          const likeCount = postLikeCountMap.get(post.ID) || 0;
+      <div className="card-classic overflow-hidden">
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="w-20 py-3 px-3 text-center text-muted-foreground font-medium">
+                  번호
+                </th>
+                <th className="py-3 px-3 text-left text-muted-foreground font-medium">
+                  제목
+                </th>
+                <th className="w-28 py-3 px-3 text-center text-muted-foreground font-medium">
+                  작성자
+                </th>
+                <th className="w-28 py-3 px-3 text-center text-muted-foreground font-medium">
+                  작성일
+                </th>
+                <th className="w-20 py-3 px-3 text-center text-muted-foreground font-medium">
+                  조회
+                </th>
+                <th className="w-20 py-3 px-3 text-center text-muted-foreground font-medium">
+                  추천
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagedPosts.map((post, index) => {
+                const authorName = getPostAuthorName(post);
+                const commentCount = commentCountMap.get(post.ID) || 0;
+                const likeCount = postLikeCountMap.get(post.ID) || 0;
+                const rowNo =
+                  filteredPosts.length -
+                  ((currentPage - 1) * POSTS_PER_PAGE + index);
 
-          return (
-            <button
-              type="button"
-              key={post.ID}
-              className="w-full text-left card-classic p-4 hover:shadow-md transition-shadow"
-              onClick={() => openPostDetail(post)}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
-                  <MessageSquareText className="w-4.5 h-4.5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3 mb-1">
-                    <h3 className="font-medium text-sm break-words">
-                      {post.TITLE} ({commentCount})
-                    </h3>
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                      <Heart className="w-3.5 h-3.5" />
+                return (
+                  <tr
+                    key={post.ID}
+                    className="border-b border-border/60 hover:bg-muted/30 transition-colors"
+                  >
+                    <td className="py-3 px-3 text-center text-muted-foreground">
+                      {post.IS_PINNED ? "공지" : rowNo}
+                    </td>
+                    <td className="py-3 px-3">
+                      <button
+                        type="button"
+                        onClick={() => openPostDetail(post)}
+                        className="inline-flex items-center gap-2 text-left hover:underline"
+                      >
+                        {post.IS_PINNED && (
+                          <span className="inline-flex items-center rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[11px] font-medium">
+                            고정
+                          </span>
+                        )}
+                        <span className="font-medium break-all">
+                          {post.TITLE}
+                        </span>
+                        {commentCount > 0 && (
+                          <span className="text-primary text-xs font-medium">
+                            [{commentCount}]
+                          </span>
+                        )}
+                      </button>
+                    </td>
+                    <td className="py-3 px-3 text-center text-muted-foreground">
+                      {authorName}
+                    </td>
+                    <td className="py-3 px-3 text-center text-muted-foreground">
+                      {formatDateOnly(post.CREATED_AT)}
+                    </td>
+                    <td className="py-3 px-3 text-center text-muted-foreground">
+                      {post.VIEW}
+                    </td>
+                    <td className="py-3 px-3 text-center text-muted-foreground">
                       {likeCount}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground whitespace-pre-wrap break-words line-clamp-3 mb-2">
-                    {post.CONTENT}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {authorName} · {formatDateTime(post.CREATED_AT)} · 조회{" "}
-                    {post.VIEW}
-                  </p>
-                </div>
-              </div>
-            </button>
-          );
-        })}
+                    </td>
+                  </tr>
+                );
+              })}
+              {pagedPosts.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
+                    {searchText.trim()
+                      ? "검색 결과가 없습니다."
+                      : "아직 등록된 게시글이 없습니다."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        {pagedPosts.length === 0 && (
-          <div className="card-classic p-8 text-center">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <MessageSquareText className="w-6 h-6 text-primary" />
+        <div className="sm:hidden divide-y divide-border/70">
+          {pagedPosts.map((post) => {
+            const authorName = getPostAuthorName(post);
+            const commentCount = commentCountMap.get(post.ID) || 0;
+            const likeCount = postLikeCountMap.get(post.ID) || 0;
+
+            return (
+              <button
+                type="button"
+                key={post.ID}
+                className="w-full text-left px-4 py-3 hover:bg-muted/30 transition-colors"
+                onClick={() => openPostDetail(post)}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  {post.IS_PINNED && (
+                    <span className="inline-flex items-center rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[11px] font-medium">
+                      고정
+                    </span>
+                  )}
+                  <p className="font-medium text-sm break-all">{post.TITLE}</p>
+                  {commentCount > 0 && (
+                    <span className="text-primary text-xs font-medium">
+                      [{commentCount}]
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {authorName} · {formatDateOnly(post.CREATED_AT)} · 조회{" "}
+                  {post.VIEW} · 추천 {likeCount}
+                </p>
+              </button>
+            );
+          })}
+
+          {pagedPosts.length === 0 && (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              {searchText.trim()
+                ? "검색 결과가 없습니다."
+                : "아직 등록된 게시글이 없습니다."}
             </div>
-            <h2 className="font-heading text-xl font-bold mb-2">
-              {searchText.trim()
-                ? "검색 결과가 없습니다"
-                : "첫 글을 작성해보세요"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {searchText.trim()
-                ? "다른 검색어로 다시 시도해보세요."
-                : "아직 등록된 글이 없습니다. 우측 상단의 글쓰기 버튼으로 시작할 수 있습니다."}
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {filteredPosts.length > 0 && totalPages > 1 && (
