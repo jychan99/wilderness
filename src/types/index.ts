@@ -88,6 +88,7 @@ export interface SCHEDULE {
   TITLE: string;
   DATE: string;
   CONTENT: string;
+  USER_CODE: string;
 }
 
 //전산회계

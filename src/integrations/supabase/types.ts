@@ -20,18 +20,21 @@ export type Database = {
           TITLE: string;
           DATE: string;
           CONTENT: string;
+          USER_CODE: string;
         };
         Insert: {
           ID: string;
           TITLE: string;
           DATE: string;
           CONTENT: string;
+          USER_CODE: string;
         };
         Update: {
           ID?: string;
           TITLE?: string;
           DATE?: string;
           CONTENT?: string;
+          USER_CODE?: string;
         };
       };
       MEETING: {

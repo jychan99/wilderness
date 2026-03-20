@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SCHEDULE, MEETING, NOTIFICATION, STU_MAIN } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,7 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 interface DashboardProps {
-  onTabChange: (tab: string) => void;
+  onTabChange?: (tab: string) => void;
 }
 
 interface DailyMissaResponse {
@@ -61,7 +64,7 @@ const getTodayKstDateForInput = () => {
   return kst.toISOString().split("T")[0];
 };
 
-const Dashboard = ({ onTabChange }: DashboardProps) => {
+const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -74,6 +77,15 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [dailyMissaDate, setDailyMissaDate] = useState(getTodayKstDateForInput);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const isScheduleAdmin = user?.position === "0";
+
+  const canManageSchedule = (event: SCHEDULE | null) => {
+    if (!user || !event) return false;
+    return isScheduleAdmin || event.USER_CODE === user.USER_CODE;
+  };
 
   // 캘린더 이벤트 조회
   const { data: events = [], isLoading: eventsLoading } = useQuery<
@@ -217,6 +229,7 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
           TITLE: event.TITLE,
           DATE: event.DATE,
           CONTENT: event.CONTENT,
+          USER_CODE: event.USER_CODE,
         },
       ]);
       if (error) throw error;
@@ -231,7 +244,9 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
   // 이벤트 수정 뮤테이션
   const editEventMutation = useMutation<void, Error, SCHEDULE>({
     mutationFn: async (event: SCHEDULE) => {
-      const { error } = await (supabase as any)
+      if (!user) throw new Error("사용자 정보가 없습니다.");
+
+      let query = (supabase as any)
         .from("SCHEDULE")
         .update({
           TITLE: event.TITLE,
@@ -239,30 +254,61 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
           CONTENT: event.CONTENT,
         })
         .eq("ID", event.ID);
+
+      if (!isScheduleAdmin) {
+        query = query.eq("USER_CODE", user.USER_CODE);
+      }
+
+      const { data, error } = await query.select("ID");
       if (error) throw error;
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error("수정 권한이 없거나 일정을 찾을 수 없습니다.");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar_events"] });
       setEditingEvent(null);
       setIsEditMode(false);
       setSelectedEvent(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "일정 수정 실패",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
   // 이벤트 삭제 뮤테이션
-  const deleteEventMutation = useMutation<void, Error, string>({
-    mutationFn: async (eventId: string) => {
-      const { error } = await supabase
-        .from("SCHEDULE")
-        .delete()
-        .eq("ID", eventId);
+  const deleteEventMutation = useMutation<void, Error, SCHEDULE>({
+    mutationFn: async (event: SCHEDULE) => {
+      if (!user) throw new Error("사용자 정보가 없습니다.");
+
+      let query = supabase.from("SCHEDULE").delete().eq("ID", event.ID);
+
+      if (!isScheduleAdmin) {
+        query = query.eq("USER_CODE", user.USER_CODE);
+      }
+
+      const { data, error } = await query.select("ID");
       if (error) throw error;
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error("삭제 권한이 없거나 일정을 찾을 수 없습니다.");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar_events"] });
       setSelectedEvent(null);
       setEditingEvent(null);
       setIsEditMode(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "일정 삭제 실패",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -314,20 +360,71 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
 
   const todayEvents = events.filter((e) => e.DATE === todayStr);
   const todayFeastLabels = feastLabelsByMonthDay.get(todayMonthDay) || [];
+  const canManageSelectedEvent = canManageSchedule(selectedEvent);
 
   const handleAddEvent = () => {
+    if (!user) {
+      toast({
+        title: "일정 추가 실패",
+        description: "로그인 사용자 정보가 없습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!newEvent.title || !newEvent.date) return;
     const event: SCHEDULE = {
       ID: Date.now().toString(),
       TITLE: newEvent.title,
       DATE: newEvent.date,
       CONTENT: newEvent.description,
+      USER_CODE: user.USER_CODE,
     };
     addEventMutation.mutate(event);
   };
 
+  const handleDeleteSelectedEvent = () => {
+    if (!selectedEvent) return;
+
+    if (!canManageSchedule(selectedEvent)) {
+      toast({
+        title: "권한 없음",
+        description: "등록자 또는 관리자만 삭제할 수 있습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (confirm("일정을 삭제하시겠습니까?")) {
+      deleteEventMutation.mutate(selectedEvent);
+    }
+  };
+
+  const handleSaveEditingEvent = () => {
+    if (!editingEvent) return;
+
+    if (!canManageSchedule(editingEvent)) {
+      toast({
+        title: "권한 없음",
+        description: "등록자 또는 관리자만 수정할 수 있습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    editEventMutation.mutate(editingEvent);
+  };
+
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const handleTabChange = (tab: string) => {
+    if (onTabChange) {
+      onTabChange(tab);
+      return;
+    }
+
+    navigate(`/${tab}`);
+  };
 
   const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -351,7 +448,7 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
       {/* Chairman Notifications */}
       <div className="card-classic p-5">
         <button
-          onClick={() => onTabChange("notifications")}
+          onClick={() => handleTabChange("notifications")}
           className="font-heading font-semibold text-lg mb-3 hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
         >
           📢 공지사항
@@ -512,21 +609,30 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
                         {day}
                       </span>
                       {feastLabels.length > 0 && (
-                        <p
-                          className="mt-1 text-[10px] sm:text-xs font-semibold text-primary truncate"
-                          title={feastLabels.join(", ")}
-                        >
-                          {feastLabels.join(", ")}
-                        </p>
+                        <div className="mt-1.5 space-y-1">
+                          {feastLabels.map((feastLabel) => (
+                            <p
+                              key={feastLabel}
+                              className="rounded-md border border-dashed border-primary/25 bg-primary/5 px-1.5 py-1 text-[9px] sm:text-[10px] font-medium text-foreground/75 leading-tight whitespace-normal break-words"
+                            >
+                              {feastLabel}
+                            </p>
+                          ))}
+                        </div>
                       )}
                       <div className="mt-1 space-y-1 max-h-[60px] sm:max-h-[84px] overflow-y-auto pr-1 calendar-scrollbar">
                         {getEventsForDay(day).map((event) => (
                           <div
                             key={event.ID}
-                            className="text-[15px] px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary font-semibold truncate cursor-pointer hover:bg-primary/15"
+                            className="px-1.5 py-1 rounded border border-primary/40 bg-primary/10 text-primary text-[11px] sm:text-xs font-semibold leading-tight cursor-pointer hover:bg-primary/15 overflow-hidden break-words"
                             title={event.TITLE}
                             role="button"
                             tabIndex={0}
+                            style={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                            }}
                             onClick={() => setSelectedEvent(event)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
@@ -561,12 +667,17 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
           ) : todayEvents.length > 0 || todayFeastLabels.length > 0 ? (
             <div className="space-y-2">
               {todayFeastLabels.map((feastLabel) => (
-                <p
+                <div
                   key={feastLabel}
-                  className="p-3 rounded-lg border border-primary/30 bg-primary/10 text-primary font-semibold"
+                  className="rounded-lg border border-dashed border-primary/30 bg-primary/5 px-3 py-2.5"
                 >
-                  {feastLabel}
-                </p>
+                  <p className="text-[11px] font-semibold tracking-[0.12em] text-primary/70">
+                    축일
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-foreground/85">
+                    {feastLabel}
+                  </p>
+                </div>
               ))}
               {todayEvents.map((event) => (
                 <button
@@ -685,34 +796,32 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
                   {selectedEvent.CONTENT || "내용이 없습니다."}
                 </p>
               </div>
-              <div className="flex gap-2 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    setEditingEvent(selectedEvent);
-                    setIsEditMode(true);
-                  }}
-                >
-                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                  수정
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    if (confirm("일정을 삭제하시겠습니까?")) {
-                      deleteEventMutation.mutate(selectedEvent.ID);
-                    }
-                  }}
-                  disabled={deleteEventMutation.isPending}
-                >
-                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                  {deleteEventMutation.isPending ? "삭제 중..." : "삭제"}
-                </Button>
-              </div>
+              {canManageSelectedEvent && (
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setEditingEvent(selectedEvent);
+                      setIsEditMode(true);
+                    }}
+                  >
+                    <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                    수정
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleDeleteSelectedEvent}
+                    disabled={deleteEventMutation.isPending}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    {deleteEventMutation.isPending ? "삭제 중..." : "삭제"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
@@ -768,9 +877,12 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
                 />
               </div>
               <Button
-                onClick={() => editEventMutation.mutate(editingEvent)}
+                onClick={handleSaveEditingEvent}
                 className="w-full"
-                disabled={editEventMutation.isPending}
+                disabled={
+                  editEventMutation.isPending ||
+                  !canManageSchedule(editingEvent)
+                }
               >
                 {editEventMutation.isPending ? (
                   <>
@@ -789,7 +901,7 @@ const Dashboard = ({ onTabChange }: DashboardProps) => {
       {/* Latest Meeting Note */}
       <div className="card-classic p-5">
         <button
-          onClick={() => onTabChange("meetings")}
+          onClick={() => handleTabChange("meetings")}
           className="font-heading font-semibold text-lg mb-3 hover:text-primary transition-colors cursor-pointer flex items-center gap-2 group"
         >
           📝 최근 회의록
