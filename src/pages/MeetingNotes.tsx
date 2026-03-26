@@ -6,14 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
@@ -181,11 +174,17 @@ const MeetingNotes = () => {
     }));
   };
 
+  const getPlainText = (html: string) =>
+    html
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .trim();
+
   const handleSubmit = () => {
-    if (!form.TITLE || !form.CONTENT) return;
+    if (!form.TITLE.trim() || !getPlainText(form.CONTENT)) return;
 
     submitNoteMutation.mutate({
-      TITLE: form.TITLE,
+      TITLE: form.TITLE.trim(),
       CONTENT: form.CONTENT,
       AUTHOR: user?.name || "관리자",
       // DATE 제거 (DB default NOW())
@@ -200,11 +199,12 @@ const MeetingNotes = () => {
   };
 
   const handleEditSave = () => {
-    if (!form.TITLE || !form.CONTENT || !selectedNote) return;
+    if (!form.TITLE.trim() || !getPlainText(form.CONTENT) || !selectedNote)
+      return;
 
     updateNoteMutation.mutate({
       ...selectedNote,
-      TITLE: form.TITLE,
+      TITLE: form.TITLE.trim(),
       CONTENT: form.CONTENT,
     });
   };
@@ -220,6 +220,62 @@ const MeetingNotes = () => {
     (user?.name === selectedNote.AUTHOR ||
       user?.role === "admin" ||
       isViceChairOrSecretary);
+
+  if (showWrite) {
+    return (
+      <div className="space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setShowWrite(false);
+            setForm({ TITLE: "", CONTENT: "" });
+          }}
+        >
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          목록으로
+        </Button>
+
+        <div className="card-classic p-6">
+          <h2 className="font-heading text-xl font-bold mb-4">회의록 작성</h2>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>제목</Label>
+              <Input
+                value={form.TITLE}
+                onChange={(e) => setForm({ ...form, TITLE: e.target.value })}
+                placeholder="회의록 제목"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>내용</Label>
+              <RichTextEditor
+                value={form.CONTENT}
+                onChange={(html) => setForm({ ...form, CONTENT: html })}
+                placeholder="회의 내용을 작성하세요"
+                minHeight="220px"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button onClick={handleSubmit} className="flex-1">
+                작성 완료
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowWrite(false);
+                  setForm({ TITLE: "", CONTENT: "" });
+                }}
+              >
+                취소
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 수정 모드
   if (selectedNote && isEditMode) {
@@ -249,11 +305,11 @@ const MeetingNotes = () => {
             </div>
             <div className="space-y-1.5">
               <Label>내용</Label>
-              <Textarea
+              <RichTextEditor
                 value={form.CONTENT}
-                onChange={(e) => setForm({ ...form, CONTENT: e.target.value })}
+                onChange={(html) => setForm({ ...form, CONTENT: html })}
                 placeholder="회의 내용을 작성하세요"
-                className="min-h-[200px]"
+                minHeight="220px"
               />
             </div>
             <div className="flex gap-3">
@@ -313,9 +369,10 @@ const MeetingNotes = () => {
             )}
           </div>
           <hr className="border-border mb-4" />
-          <pre className="text-sm whitespace-pre-wrap font-body leading-relaxed text-foreground/85">
-            {selectedNote.CONTENT}
-          </pre>
+          <div
+            className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground/85"
+            dangerouslySetInnerHTML={{ __html: selectedNote.CONTENT }}
+          />
         </div>
       </div>
     );
@@ -327,45 +384,18 @@ const MeetingNotes = () => {
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">총 {notes.length}건</p>
         {isAuthorized && (
-          <Dialog open={showWrite} onOpenChange={setShowWrite}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="w-4 h-4 mr-1.5" />
-                회의록 작성
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="font-heading">회의록 작성</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-1.5">
-                  <Label>제목</Label>
-                  <Input
-                    value={form.TITLE}
-                    onChange={(e) =>
-                      setForm({ ...form, TITLE: e.target.value })
-                    }
-                    placeholder="회의록 제목"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>내용</Label>
-                  <Textarea
-                    value={form.CONTENT}
-                    onChange={(e) =>
-                      setForm({ ...form, CONTENT: e.target.value })
-                    }
-                    placeholder="회의 내용을 작성하세요"
-                    className="min-h-[200px]"
-                  />
-                </div>
-                <Button onClick={handleSubmit} className="w-full">
-                  작성 완료
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button
+            size="sm"
+            onClick={() => {
+              setSelectedNote(null);
+              setIsEditMode(false);
+              setForm({ TITLE: "", CONTENT: "" });
+              setShowWrite(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-1.5" />
+            회의록 작성
+          </Button>
         )}
       </div>
 

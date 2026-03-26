@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   MessageSquareText,
   Plus,
@@ -988,11 +989,11 @@ const FreeBoard = () => {
             </div>
             <div className="space-y-1.5">
               <Label>내용</Label>
-              <Textarea
+              <RichTextEditor
                 value={form.content}
-                onChange={(e) => setForm({ ...form, content: e.target.value })}
+                onChange={(html) => setForm({ ...form, content: html })}
                 placeholder="내용을 입력하세요"
-                className="min-h-[260px]"
+                minHeight="260px"
               />
             </div>
             <div className="flex gap-3">
@@ -1039,13 +1040,11 @@ const FreeBoard = () => {
             </div>
             <div className="space-y-1.5">
               <Label>내용</Label>
-              <Textarea
+              <RichTextEditor
                 value={editForm.content}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, content: e.target.value })
-                }
+                onChange={(html) => setEditForm({ ...editForm, content: html })}
                 placeholder="내용을 입력하세요"
-                className="min-h-[220px]"
+                minHeight="220px"
               />
             </div>
             <div className="flex gap-3">
@@ -1128,9 +1127,10 @@ const FreeBoard = () => {
           </div>
 
           <hr className="my-4" />
-          <div className="whitespace-pre-wrap text-sm leading-relaxed mb-6">
-            {selectedPost.CONTENT}
-          </div>
+          <div
+            className="prose prose-sm max-w-none text-sm leading-relaxed mb-6"
+            dangerouslySetInnerHTML={{ __html: selectedPost.CONTENT }}
+          />
 
           <div className="space-y-3 border-t border-border pt-4">
             <h3 className="font-heading font-semibold text-sm">댓글</h3>

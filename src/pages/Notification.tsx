@@ -6,14 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Plus, Trash2, Bell, ArrowLeft, ChevronDown } from "lucide-react";
 
 const Notification = () => {
@@ -121,13 +114,16 @@ const Notification = () => {
   });
 
   const handleAddNotification = () => {
-    if (!notificationForm.title || !notificationForm.content) {
+    if (
+      !notificationForm.title.trim() ||
+      !getPlainText(notificationForm.content)
+    ) {
       alert("제목과 내용을 입력해주세요.");
       return;
     }
 
     addNotificationMutation.mutate({
-      TITLE: notificationForm.title,
+      TITLE: notificationForm.title.trim(),
       CONTENT: notificationForm.content,
       AUTHOR: user?.name || "회장",
       POSITION: "1",
@@ -157,11 +153,16 @@ const Notification = () => {
   };
 
   const handleEditSave = () => {
-    if (!editForm.title || !editForm.content || !selectedNotification) return;
+    if (
+      !editForm.title.trim() ||
+      !getPlainText(editForm.content) ||
+      !selectedNotification
+    )
+      return;
 
     updateNotificationMutation.mutate({
       ...selectedNotification,
-      TITLE: editForm.title,
+      TITLE: editForm.title.trim(),
       CONTENT: editForm.content,
     });
     // 저장 후 수정 모드만 종료 (상세보기는 유지)
@@ -227,6 +228,12 @@ const Notification = () => {
     }));
   };
 
+  const getPlainText = (html: string) =>
+    html
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .trim();
+
   // 수정 모드
   if (isEditMode && selectedNotification) {
     return (
@@ -250,13 +257,11 @@ const Notification = () => {
             </div>
             <div className="space-y-1.5">
               <Label>내용</Label>
-              <Textarea
+              <RichTextEditor
                 value={editForm.content}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, content: e.target.value })
-                }
+                onChange={(html) => setEditForm({ ...editForm, content: html })}
                 placeholder="공지사항 내용을 작성하세요"
-                className="min-h-[200px]"
+                minHeight="220px"
               />
             </div>
             <div className="flex gap-3">
@@ -267,6 +272,75 @@ const Notification = () => {
                 variant="outline"
                 onClick={handleEditCancel}
                 className="flex-1"
+              >
+                취소
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showAdd) {
+    return (
+      <div className="space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setShowAdd(false);
+            setNotificationForm({ title: "", content: "" });
+          }}
+        >
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          목록으로
+        </Button>
+        <div className="card-classic p-6">
+          <h2 className="font-heading text-xl font-bold mb-4">공지사항 등록</h2>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>제목</Label>
+              <Input
+                value={notificationForm.title}
+                onChange={(e) =>
+                  setNotificationForm({
+                    ...notificationForm,
+                    title: e.target.value,
+                  })
+                }
+                placeholder="공지사항 제목"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>내용</Label>
+              <RichTextEditor
+                value={notificationForm.content}
+                onChange={(html) =>
+                  setNotificationForm({
+                    ...notificationForm,
+                    content: html,
+                  })
+                }
+                placeholder="공지사항 내용을 작성하세요"
+                minHeight="220px"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleAddNotification}
+                className="flex-1"
+                disabled={addNotificationMutation.isPending}
+              >
+                {addNotificationMutation.isPending ? "등록 중..." : "등록 완료"}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowAdd(false);
+                  setNotificationForm({ title: "", content: "" });
+                }}
               >
                 취소
               </Button>
@@ -303,9 +377,10 @@ const Notification = () => {
             </div>
           </div>
           <hr className="my-4" />
-          <div className="whitespace-pre-wrap text-sm leading-relaxed mb-6">
-            {selectedNotification.CONTENT}
-          </div>
+          <div
+            className="prose prose-sm max-w-none text-sm leading-relaxed mb-6"
+            dangerouslySetInnerHTML={{ __html: selectedNotification.CONTENT }}
+          />
           <div className="flex gap-3">
             {canEditDelete && (
               <Button onClick={handleStartEdit} className="flex-1">
@@ -330,59 +405,19 @@ const Notification = () => {
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">공지사항</p>
         {canEditDelete && (
-          <Dialog open={showAdd} onOpenChange={setShowAdd}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="w-4 h-4 mr-1.5" />
-                공지사항 등록
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="font-heading">
-                  공지사항 등록
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-1.5">
-                  <Label>제목</Label>
-                  <Input
-                    value={notificationForm.title}
-                    onChange={(e) =>
-                      setNotificationForm({
-                        ...notificationForm,
-                        title: e.target.value,
-                      })
-                    }
-                    placeholder="공지사항 제목"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>내용</Label>
-                  <Textarea
-                    value={notificationForm.content}
-                    onChange={(e) =>
-                      setNotificationForm({
-                        ...notificationForm,
-                        content: e.target.value,
-                      })
-                    }
-                    placeholder="공지사항 내용을 작성하세요"
-                    className="min-h-[200px]"
-                  />
-                </div>
-                <Button
-                  onClick={handleAddNotification}
-                  className="w-full"
-                  disabled={addNotificationMutation.isPending}
-                >
-                  {addNotificationMutation.isPending
-                    ? "등록 중..."
-                    : "등록 완료"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button
+            size="sm"
+            onClick={() => {
+              setSelectedNotification(null);
+              setIsDetailMode(false);
+              setIsEditMode(false);
+              setNotificationForm({ title: "", content: "" });
+              setShowAdd(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-1.5" />
+            공지사항 등록
+          </Button>
         )}
       </div>
 
@@ -431,7 +466,7 @@ const Notification = () => {
                               {notification.TITLE}
                             </h4>
                             <p className="text-xs text-muted-foreground mb-2">
-                              {notification.CONTENT}
+                              {getPlainText(notification.CONTENT)}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {formatDateTime(notification.CREATED_AT)}
