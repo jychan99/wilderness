@@ -66,6 +66,24 @@ const ToolbarButton = ({
 const Toolbar = ({ editor }: { editor: Editor | null }) => {
   if (!editor) return null;
 
+  const normalizeUrl = (rawUrl: string) => {
+    const trimmed = rawUrl.trim();
+    if (!trimmed) return "";
+
+    // Keep known protocols as-is.
+    if (/^(https?:|mailto:|tel:|ftp:)/i.test(trimmed)) {
+      return trimmed;
+    }
+
+    // Support in-page anchors.
+    if (trimmed.startsWith("#")) {
+      return trimmed;
+    }
+
+    // Default to https to avoid relative path navigation.
+    return `https://${trimmed}`;
+  };
+
   const setLink = useCallback(() => {
     const previousUrl = editor.getAttributes("link").href as string | undefined;
     const url = window.prompt("URL을 입력하세요", previousUrl ?? "");
@@ -74,7 +92,13 @@ const Toolbar = ({ editor }: { editor: Editor | null }) => {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+    const normalizedUrl = normalizeUrl(url);
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({ href: normalizedUrl })
+      .run();
   }, [editor]);
 
   return (
