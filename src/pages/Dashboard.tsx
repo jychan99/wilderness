@@ -69,7 +69,8 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: "",
-    date: "",
+    startDate: "",
+    endDate: "",
     description: "",
   });
   const [selectedEvent, setSelectedEvent] = useState<SCHEDULE | null>(null);
@@ -227,7 +228,8 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
         {
           ID: event.ID,
           TITLE: event.TITLE,
-          DATE: event.DATE,
+          START_DATE: event.START_DATE,
+          END_DATE: event.END_DATE,
           CONTENT: event.CONTENT,
           USER_CODE: event.USER_CODE,
         },
@@ -236,7 +238,7 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar_events"] });
-      setNewEvent({ title: "", date: "", description: "" });
+      setNewEvent({ title: "", startDate: "", endDate: "", description: "" });
       setShowAddEvent(false);
     },
   });
@@ -250,7 +252,8 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
         .from("SCHEDULE")
         .update({
           TITLE: event.TITLE,
-          DATE: event.DATE,
+          START_DATE: event.START_DATE,
+          END_DATE: event.END_DATE,
           CONTENT: event.CONTENT,
         })
         .eq("ID", event.ID);
@@ -355,10 +358,14 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
 
   const getEventsForDay = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return events.filter((e) => e.DATE === dateStr);
+    return events.filter(
+      (e) => e.START_DATE <= dateStr && dateStr <= e.END_DATE,
+    );
   };
 
-  const todayEvents = events.filter((e) => e.DATE === todayStr);
+  const todayEvents = events.filter(
+    (e) => e.START_DATE <= todayStr && todayStr <= e.END_DATE,
+  );
   const todayFeastLabels = feastLabelsByMonthDay.get(todayMonthDay) || [];
   const canManageSelectedEvent = canManageSchedule(selectedEvent);
 
@@ -372,11 +379,20 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
       return;
     }
 
-    if (!newEvent.title || !newEvent.date) return;
+    if (!newEvent.title || !newEvent.startDate || !newEvent.endDate) return;
+    if (newEvent.endDate < newEvent.startDate) {
+      toast({
+        title: "날짜 오류",
+        description: "종료일은 시작일보다 이전일 수 없습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
     const event: SCHEDULE = {
       ID: Date.now().toString(),
       TITLE: newEvent.title,
-      DATE: newEvent.date,
+      START_DATE: newEvent.startDate,
+      END_DATE: newEvent.endDate,
       CONTENT: newEvent.description,
       USER_CODE: user.USER_CODE,
     };
@@ -412,6 +428,14 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
       return;
     }
 
+    if (editingEvent.END_DATE < editingEvent.START_DATE) {
+      toast({
+        title: "날짜 오류",
+        description: "종료일은 시작일보다 이전일 수 없습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
     editEventMutation.mutate(editingEvent);
   };
 
@@ -515,12 +539,22 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>날짜</Label>
+                    <Label>시작일</Label>
                     <Input
                       type="date"
-                      value={newEvent.date}
+                      value={newEvent.startDate}
                       onChange={(e) =>
-                        setNewEvent({ ...newEvent, date: e.target.value })
+                        setNewEvent({ ...newEvent, startDate: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>종료일</Label>
+                    <Input
+                      type="date"
+                      value={newEvent.endDate}
+                      onChange={(e) =>
+                        setNewEvent({ ...newEvent, endDate: e.target.value })
                       }
                     />
                   </div>
@@ -789,6 +823,16 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
                 <p className="font-medium text-base">{selectedEvent.TITLE}</p>
               </div>
               <div>
+                <p className="text-sm font-semibold text-muted-foreground">
+                  기간
+                </p>
+                <p className="text-sm">
+                  {selectedEvent.START_DATE === selectedEvent.END_DATE
+                    ? selectedEvent.START_DATE
+                    : `${selectedEvent.START_DATE} ~ ${selectedEvent.END_DATE}`}
+                </p>
+              </div>
+              <div>
                 <hr />
               </div>
               <div>
@@ -854,12 +898,28 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
                 />
               </div>
               <div className="space-y-2">
-                <Label>날짜</Label>
+                <Label>시작일</Label>
                 <Input
                   type="date"
-                  value={editingEvent.DATE}
+                  value={editingEvent.START_DATE}
                   onChange={(e) =>
-                    setEditingEvent({ ...editingEvent, DATE: e.target.value })
+                    setEditingEvent({
+                      ...editingEvent,
+                      START_DATE: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>종료일</Label>
+                <Input
+                  type="date"
+                  value={editingEvent.END_DATE}
+                  onChange={(e) =>
+                    setEditingEvent({
+                      ...editingEvent,
+                      END_DATE: e.target.value,
+                    })
                   }
                 />
               </div>

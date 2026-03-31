@@ -86,7 +86,8 @@ export interface MEETING {
 export interface SCHEDULE {
   ID: string;
   TITLE: string;
-  DATE: string;
+  START_DATE: string;
+  END_DATE: string;
   CONTENT: string;
   USER_CODE: string;
 }

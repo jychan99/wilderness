@@ -18,21 +18,24 @@ export type Database = {
         Row: {
           ID: string;
           TITLE: string;
-          DATE: string;
+          START_DATE: string;
+          END_DATE: string;
           CONTENT: string;
           USER_CODE: string;
         };
         Insert: {
           ID: string;
           TITLE: string;
-          DATE: string;
+          START_DATE: string;
+          END_DATE: string;
           CONTENT: string;
           USER_CODE: string;
         };
         Update: {
           ID?: string;
           TITLE?: string;
-          DATE?: string;
+          START_DATE?: string;
+          END_DATE?: string;
           CONTENT?: string;
           USER_CODE?: string;
         };
