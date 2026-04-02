@@ -1,20 +1,24 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import type { EventResizeDoneArg } from "@fullcalendar/interaction";
+import koLocale from "@fullcalendar/core/locales/ko";
+import type {
+  DayCellContentArg,
+  EventClickArg,
+  EventDropArg,
+  EventInput,
+} from "@fullcalendar/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SCHEDULE, MEETING, NOTIFICATION, STU_MAIN } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  Loader2,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { ChevronRight, Plus, Loader2, Pencil, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +55,16 @@ interface DailyMissaLegacyResponse {
   gospelSectionTexts?: string[];
 }
 
+const DEFAULT_SCHEDULE_COLOR = "#3B82F6";
+
+interface NewScheduleForm {
+  title: string;
+  startDate: string;
+  endDate: string;
+  description: string;
+  color: string;
+}
+
 const normalizeExternalUrl = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -64,14 +78,62 @@ const getTodayKstDateForInput = () => {
   return kst.toISOString().split("T")[0];
 };
 
+const shiftDateString = (date: string, days: number) => {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return date;
+
+  const shiftedDate = new Date(Date.UTC(year, month - 1, day + days));
+  return shiftedDate.toISOString().split("T")[0];
+};
+
+const toExclusiveEndDate = (date: string) => {
+  return shiftDateString(date, 1);
+};
+
+const toInclusiveEndDate = (
+  startDate: string,
+  exclusiveEndDate?: string | null,
+) => {
+  if (!exclusiveEndDate) return startDate;
+
+  const inclusiveEndDate = shiftDateString(exclusiveEndDate, -1);
+  return inclusiveEndDate < startDate ? startDate : inclusiveEndDate;
+};
+
+const normalizeHexColor = (value?: string | null) => {
+  const raw = (value || "").trim();
+  if (!raw) return DEFAULT_SCHEDULE_COLOR;
+
+  const withHash = raw.startsWith("#") ? raw : `#${raw}`;
+  return /^#[0-9A-Fa-f]{6}$/.test(withHash)
+    ? withHash.toUpperCase()
+    : DEFAULT_SCHEDULE_COLOR;
+};
+
+const getContrastingTextColor = (hexColor?: string | null) => {
+  const hex = normalizeHexColor(hexColor).slice(1);
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+
+  // Perceived luminance (WCAG) to pick readable text color.
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance < 0.5 ? "#FFFFFF" : "#111827";
+};
+
+const generateRandomHexColor = () => {
+  const randomNumber = Math.floor(Math.random() * 0xffffff);
+  return `#${randomNumber.toString(16).padStart(6, "0").toUpperCase()}`;
+};
+
 const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
-  const [newEvent, setNewEvent] = useState({
+  const [newEvent, setNewEvent] = useState<NewScheduleForm>({
     title: "",
     startDate: "",
     endDate: "",
     description: "",
+    color: generateRandomHexColor(),
   });
   const [selectedEvent, setSelectedEvent] = useState<SCHEDULE | null>(null);
   const [editingEvent, setEditingEvent] = useState<SCHEDULE | null>(null);
@@ -232,13 +294,20 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
           END_DATE: event.END_DATE,
           CONTENT: event.CONTENT,
           USER_CODE: event.USER_CODE,
+          COLOR: event.COLOR,
         },
       ]);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar_events"] });
-      setNewEvent({ title: "", startDate: "", endDate: "", description: "" });
+      setNewEvent({
+        title: "",
+        startDate: "",
+        endDate: "",
+        description: "",
+        color: generateRandomHexColor(),
+      });
       setShowAddEvent(false);
     },
   });
@@ -255,6 +324,7 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
           START_DATE: event.START_DATE,
           END_DATE: event.END_DATE,
           CONTENT: event.CONTENT,
+          COLOR: event.COLOR,
         })
         .eq("ID", event.ID);
 
@@ -317,13 +387,8 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
 
   const latestMeeting = meetingNotes[0] || null;
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayStr = new Date().toISOString().split("T")[0];
-  const [todayMonthPart, todayDayPart] = todayStr.split("-");
+  const [, todayMonthPart, todayDayPart] = todayStr.split("-");
   const todayMonthDay = `${todayMonthPart}-${todayDayPart}`;
 
   const feastLabelsByMonthDay = useMemo(() => {
@@ -352,16 +417,45 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
     return map;
   }, [students]);
 
-  const days: (number | null)[] = [];
-  for (let i = 0; i < firstDay; i++) days.push(null);
-  for (let i = 1; i <= daysInMonth; i++) days.push(i);
+  const calendarEvents = useMemo<EventInput[]>(
+    () =>
+      events.map((event) => {
+        const eventColor = normalizeHexColor(event.COLOR);
 
-  const getEventsForDay = (day: number) => {
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return events.filter(
-      (e) => e.START_DATE <= dateStr && dateStr <= e.END_DATE,
-    );
-  };
+        return {
+          id: event.ID,
+          title: event.TITLE,
+          start: event.START_DATE,
+          end: toExclusiveEndDate(event.END_DATE),
+          allDay: true,
+          backgroundColor: eventColor,
+          borderColor: eventColor,
+          textColor: getContrastingTextColor(eventColor),
+          extendedProps: {
+            schedule: event,
+            isMultiDay: event.START_DATE < event.END_DATE,
+          },
+        };
+      }),
+    [events],
+  );
+
+  const holidayDateSet = useMemo(() => {
+    const holidayDates = new Set<string>();
+
+    events.forEach((event) => {
+      const isHolidayEvent = /(공휴일|대체공휴일|대체휴일)/.test(event.TITLE);
+      if (!isHolidayEvent) return;
+
+      let cursor = event.START_DATE;
+      while (cursor <= event.END_DATE) {
+        holidayDates.add(cursor);
+        cursor = shiftDateString(cursor, 1);
+      }
+    });
+
+    return holidayDates;
+  }, [events]);
 
   const todayEvents = events.filter(
     (e) => e.START_DATE <= todayStr && todayStr <= e.END_DATE,
@@ -395,6 +489,7 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
       END_DATE: newEvent.endDate,
       CONTENT: newEvent.description,
       USER_CODE: user.USER_CODE,
+      COLOR: normalizeHexColor(newEvent.color),
     };
     addEventMutation.mutate(event);
   };
@@ -436,11 +531,116 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
       });
       return;
     }
-    editEventMutation.mutate(editingEvent);
+    editEventMutation.mutate({
+      ...editingEvent,
+      COLOR: normalizeHexColor(editingEvent.COLOR),
+    });
   };
 
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const handleCalendarEventClick = (clickInfo: EventClickArg) => {
+    const schedule = clickInfo.event.extendedProps.schedule as
+      | SCHEDULE
+      | undefined;
+    if (!schedule) return;
+    setSelectedEvent(schedule);
+  };
+
+  const saveMovedOrResizedEvent = async (
+    schedule: SCHEDULE,
+    startDate: string,
+    exclusiveEndDate: string | null,
+    revert: () => void,
+  ) => {
+    if (!canManageSchedule(schedule)) {
+      toast({
+        title: "권한 없음",
+        description: "등록자 또는 관리자만 일정을 이동할 수 있습니다.",
+        variant: "destructive",
+      });
+      revert();
+      return;
+    }
+
+    const nextEvent: SCHEDULE = {
+      ...schedule,
+      START_DATE: startDate,
+      END_DATE: toInclusiveEndDate(startDate, exclusiveEndDate),
+    };
+
+    try {
+      await editEventMutation.mutateAsync(nextEvent);
+    } catch {
+      revert();
+    }
+  };
+
+  const handleCalendarEventDrop = async (dropInfo: EventDropArg) => {
+    const schedule = dropInfo.event.extendedProps.schedule as
+      | SCHEDULE
+      | undefined;
+
+    if (!schedule || !dropInfo.event.startStr) {
+      dropInfo.revert();
+      return;
+    }
+
+    await saveMovedOrResizedEvent(
+      schedule,
+      dropInfo.event.startStr,
+      dropInfo.event.endStr,
+      dropInfo.revert,
+    );
+  };
+
+  const handleCalendarEventResize = async (resizeInfo: EventResizeDoneArg) => {
+    const schedule = resizeInfo.event.extendedProps.schedule as
+      | SCHEDULE
+      | undefined;
+
+    if (!schedule || !resizeInfo.event.startStr) {
+      resizeInfo.revert();
+      return;
+    }
+
+    await saveMovedOrResizedEvent(
+      schedule,
+      resizeInfo.event.startStr,
+      resizeInfo.event.endStr,
+      resizeInfo.revert,
+    );
+  };
+
+  const renderDayCellContent = (arg: DayCellContentArg) => {
+    const monthDayKey = `${String(arg.date.getMonth() + 1).padStart(2, "0")}-${String(arg.date.getDate()).padStart(2, "0")}`;
+    const feastLabels = feastLabelsByMonthDay.get(monthDayKey) || [];
+
+    return (
+      <div className="fc-daycell-custom">
+        <span className="fc-daycell-date">{arg.date.getDate()}</span>
+        {feastLabels.length > 0 && (
+          <>
+            <p className="fc-feast-label">{feastLabels[0]}</p>
+            {feastLabels.length > 1 && (
+              <p className="fc-feast-more">+{feastLabels.length - 1}</p>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const getDayCellClassNames = (arg: { date: Date }) => {
+    const dateKey = `${arg.date.getFullYear()}-${String(arg.date.getMonth() + 1).padStart(2, "0")}-${String(arg.date.getDate()).padStart(2, "0")}`;
+    const classNames: string[] = [];
+    const dayOfWeek = arg.date.getDay();
+
+    if (dayOfWeek === 6) classNames.push("fc-day-saturday-custom");
+    if (dayOfWeek === 0) classNames.push("fc-day-sunday-custom");
+    if (holidayDateSet.has(dateKey)) classNames.push("fc-day-holiday");
+
+    return classNames;
+  };
+
   const handleTabChange = (tab: string) => {
     if (onTabChange) {
       onTabChange(tab);
@@ -450,7 +650,15 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
     navigate(`/${tab}`);
   };
 
-  const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
+  const handleAddEventDialogOpenChange = (open: boolean) => {
+    setShowAddEvent(open);
+    if (!open) return;
+
+    setNewEvent((prev) => ({
+      ...prev,
+      color: generateRandomHexColor(),
+    }));
+  };
 
   return (
     <div className="space-y-6">
@@ -509,10 +717,13 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
       <div className="card-classic p-5">
         <div className="flex items-center justify-between mb-4 gap-2">
           <h3 className="font-heading font-semibold text-base sm:text-lg">
-            📅 {year}년 {month + 1}월
+            📅 일정
           </h3>
           <div className="flex items-center gap-1 sm:gap-2">
-            <Dialog open={showAddEvent} onOpenChange={setShowAddEvent}>
+            <Dialog
+              open={showAddEvent}
+              onOpenChange={handleAddEventDialogOpenChange}
+            >
               <DialogTrigger asChild>
                 <Button
                   size="sm"
@@ -571,6 +782,33 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
                       placeholder="일정 설명 (선택)"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label>색상</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="color"
+                        value={normalizeHexColor(newEvent.color)}
+                        onChange={(e) =>
+                          setNewEvent({ ...newEvent, color: e.target.value })
+                        }
+                        className="h-10 w-16 p-1"
+                      />
+                      <Input
+                        value={newEvent.color}
+                        onChange={(e) =>
+                          setNewEvent({ ...newEvent, color: e.target.value })
+                        }
+                        onBlur={(e) =>
+                          setNewEvent({
+                            ...newEvent,
+                            color: normalizeHexColor(e.target.value),
+                          })
+                        }
+                        placeholder="#3B82F6"
+                        className="font-mono uppercase"
+                      />
+                    </div>
+                  </div>
                   <Button
                     onClick={handleAddEvent}
                     className="w-full"
@@ -588,12 +826,6 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
                 </div>
               </DialogContent>
             </Dialog>
-            <Button variant="outline" size="icon" onClick={prevMonth}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="icon" onClick={nextMonth}>
-              <ChevronRight className="w-4 h-4" />
-            </Button>
           </div>
         </div>
 
@@ -602,88 +834,37 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
-            {weekDays.map((day) => (
-              <div
-                key={day}
-                className="bg-muted p-1 sm:p-2 text-center text-xs sm:text-base font-medium text-muted-foreground"
-              >
-                {day}
-              </div>
-            ))}
-            {days.map((day, i) => {
-              const dateStr = day
-                ? `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-                : "";
-              const isToday = day ? dateStr === todayStr : false;
-              const monthDayKey = day
-                ? `${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-                : "";
-              const feastLabels = day
-                ? feastLabelsByMonthDay.get(monthDayKey) || []
-                : [];
-              return (
-                <div
-                  key={i}
-                  className={`min-h-[72px] sm:min-h-[120px] p-1 sm:p-1.5 ${
-                    day ? "bg-card" : "bg-muted/50"
-                  }`}
-                >
-                  {day && (
-                    <>
-                      <span
-                        className={`text-sm font-medium ${
-                          i % 7 === 0
-                            ? "text-destructive"
-                            : i % 7 === 6
-                              ? "text-primary"
-                              : "text-foreground"
-                        } ${isToday ? "bg-primary/15 text-primary rounded px-1.5 py-0.5" : ""}`}
-                      >
-                        {day}
-                      </span>
-                      {feastLabels.length > 0 && (
-                        <div className="mt-1.5 space-y-1">
-                          {feastLabels.map((feastLabel) => (
-                            <p
-                              key={feastLabel}
-                              className="rounded-md border border-dashed border-primary/25 bg-primary/5 px-1.5 py-1 text-[9px] sm:text-[10px] font-medium text-foreground/75 leading-tight whitespace-normal break-words"
-                            >
-                              {feastLabel}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                      <div className="mt-1 space-y-1 max-h-[60px] sm:max-h-[84px] overflow-y-auto pr-1 calendar-scrollbar">
-                        {getEventsForDay(day).map((event) => (
-                          <div
-                            key={event.ID}
-                            className="px-1.5 py-1 rounded border border-primary/40 bg-primary/10 text-primary text-[11px] sm:text-xs font-semibold leading-tight cursor-pointer hover:bg-primary/15 overflow-hidden break-words"
-                            title={event.TITLE}
-                            role="button"
-                            tabIndex={0}
-                            style={{
-                              display: "-webkit-box",
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: "vertical",
-                            }}
-                            onClick={() => setSelectedEvent(event)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                setSelectedEvent(event);
-                              }
-                            }}
-                          >
-                            {event.TITLE}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
+          <div className="rounded-lg border border-border overflow-hidden">
+            <FullCalendar
+              plugins={[dayGridPlugin, interactionPlugin]}
+              initialView="dayGridMonth"
+              locale={koLocale}
+              height="auto"
+              fixedWeekCount={false}
+              editable
+              eventStartEditable
+              eventDurationEditable
+              eventDisplay="block"
+              displayEventTime={false}
+              dayMaxEventRows={3}
+              headerToolbar={{
+                left: "prev",
+                center: "title",
+                right: "next",
+              }}
+              buttonText={{ today: "오늘" }}
+              events={calendarEvents}
+              dayCellContent={renderDayCellContent}
+              dayCellClassNames={getDayCellClassNames}
+              eventClick={handleCalendarEventClick}
+              eventDrop={handleCalendarEventDrop}
+              eventResize={handleCalendarEventResize}
+              eventClassNames={(arg) =>
+                arg.event.extendedProps.isMultiDay
+                  ? ["fc-event-multi-day"]
+                  : ["fc-event-single-day"]
+              }
+            />
           </div>
         )}
       </div>
@@ -935,6 +1116,39 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
                   }
                   placeholder="일정 설명 (선택)"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>색상</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={normalizeHexColor(editingEvent.COLOR)}
+                    onChange={(e) =>
+                      setEditingEvent({
+                        ...editingEvent,
+                        COLOR: e.target.value,
+                      })
+                    }
+                    className="h-10 w-16 p-1"
+                  />
+                  <Input
+                    value={editingEvent.COLOR || ""}
+                    onChange={(e) =>
+                      setEditingEvent({
+                        ...editingEvent,
+                        COLOR: e.target.value,
+                      })
+                    }
+                    onBlur={(e) =>
+                      setEditingEvent({
+                        ...editingEvent,
+                        COLOR: normalizeHexColor(e.target.value),
+                      })
+                    }
+                    placeholder="#3B82F6"
+                    className="font-mono uppercase"
+                  />
+                </div>
               </div>
               <Button
                 onClick={handleSaveEditingEvent}

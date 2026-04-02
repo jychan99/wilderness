@@ -22,6 +22,7 @@ export type Database = {
           END_DATE: string;
           CONTENT: string;
           USER_CODE: string;
+          COLOR: string;
         };
         Insert: {
           ID: string;
@@ -30,6 +31,7 @@ export type Database = {
           END_DATE: string;
           CONTENT: string;
           USER_CODE: string;
+          COLOR: string;
         };
         Update: {
           ID?: string;
@@ -38,6 +40,7 @@ export type Database = {
           END_DATE?: string;
           CONTENT?: string;
           USER_CODE?: string;
+          COLOR?: string;
         };
       };
       MEETING: {

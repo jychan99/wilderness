@@ -90,6 +90,7 @@ export interface SCHEDULE {
   END_DATE: string;
   CONTENT: string;
   USER_CODE: string;
+  COLOR: string;
 }
 
 //전산회계
