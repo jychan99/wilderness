@@ -45,6 +45,44 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+const GRADE_LABEL_TO_CODE: Record<string, string> = {
+  유치부: "K",
+  초등부: "E",
+  중등부: "M",
+  고등부: "H",
+  초1: "E1",
+  초2: "E2",
+  초3: "E3",
+  초4: "E4",
+  초5: "E5",
+  초6: "E6",
+  중1: "M1",
+  중2: "M2",
+  중3: "M3",
+  고1: "H1",
+  고2: "H2",
+  고3: "H3",
+};
+
+const GRADE_SORT_ORDER: Record<string, number> = {
+  K: 0,
+  E: 1,
+  E1: 2,
+  E2: 3,
+  E3: 4,
+  E4: 5,
+  E5: 6,
+  E6: 7,
+  M: 8,
+  M1: 9,
+  M2: 10,
+  M3: 11,
+  H: 12,
+  H1: 13,
+  H2: 14,
+  H3: 15,
+};
+
 const StudentManagement = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -242,24 +280,11 @@ const StudentManagement = () => {
   const filteredStudents = useMemo(() => {
     if (!user) return [];
 
-    const gradeLabelToCode: Record<string, string> = {
-      유치부: "K",
-      초등부: "E",
-      중등부: "M",
-      고등부: "H",
-      초1: "E1",
-      초2: "E2",
-      초3: "E3",
-      초4: "E4",
-      초5: "E5",
-      초6: "E6",
-      중1: "M1",
-      중2: "M2",
-      중3: "M3",
-      고1: "H1",
-      고2: "H2",
-      고3: "H3",
-    };
+    const userGradeList = String(user.grade || "")
+      .split(",")
+      .map((g) => g.trim())
+      .filter((g) => g.length > 0)
+      .map((g) => GRADE_LABEL_TO_CODE[g] || g);
 
     const isAdmin =
       Number(user.position) === 0 ||
@@ -270,21 +295,6 @@ const StudentManagement = () => {
       ? students
       : students.filter((s) => {
           const studentGrade = String(s.GRADE);
-
-          // user.grade를 배열로 변환 (쉼표로 분리되는 형식: 초2,중2 또는 E2,M2)
-          let userGradeList: string[] = [];
-          const gradeStr = String(user.grade || "");
-
-          if (gradeStr.length > 0) {
-            userGradeList = gradeStr
-              .split(/,/) // 쉼표로 split
-              .map((g) => g.trim()) // 각 요소 양쪽 공백 제거
-              .filter((g) => g.length > 0)
-              .map((g) => {
-                // 한글을 코드로 변환, 이미 코드면 그대로 반환
-                return gradeLabelToCode[g] || g;
-              });
-          }
 
           // 학생의 학년이 사용자의 담당학년 중 하나와 일치하거나 부모 코드로 시작
           return userGradeList.some((userCode) => {
@@ -297,30 +307,10 @@ const StudentManagement = () => {
           });
         });
 
-    // 학년 순서 정의 (코드 형식)
-    const gradeOrder: Record<string, number> = {
-      K: 0,
-      E: 1,
-      E1: 2,
-      E2: 3,
-      E3: 4,
-      E4: 5,
-      E5: 6,
-      E6: 7,
-      M: 8,
-      M1: 9,
-      M2: 10,
-      M3: 11,
-      H: 12,
-      H1: 13,
-      H2: 14,
-      H3: 15,
-    };
-
     // 학년으로 먼저 정렬, 같은 학년 내에서 이름으로 정렬
-    return filtered.sort((a, b) => {
-      const gradeOrder_a = gradeOrder[String(a.GRADE)] ?? 999;
-      const gradeOrder_b = gradeOrder[String(b.GRADE)] ?? 999;
+    return [...filtered].sort((a, b) => {
+      const gradeOrder_a = GRADE_SORT_ORDER[String(a.GRADE)] ?? 999;
+      const gradeOrder_b = GRADE_SORT_ORDER[String(b.GRADE)] ?? 999;
 
       if (gradeOrder_a !== gradeOrder_b) {
         return gradeOrder_a - gradeOrder_b;
@@ -350,15 +340,23 @@ const StudentManagement = () => {
       });
     }
 
+    const filteredAttendance = attendance.filter((record) => {
+      if (statsStartDate && record.DATE < statsStartDate) return false;
+      if (statsEndDate && record.DATE > statsEndDate) return false;
+      return true;
+    });
+
+    const attendanceByUser = new Map<string, ATTENDANCE[]>();
+    filteredAttendance.forEach((record) => {
+      const key = String(record.USER_CODE || "");
+      const current = attendanceByUser.get(key) || [];
+      current.push(record);
+      attendanceByUser.set(key, current);
+    });
+
     return studentsForStats.map((student) => {
-      // 날짜 필터 적용
-      let records = attendance.filter((a) => a.USER_CODE === student.USER_CODE);
-      if (statsStartDate) {
-        records = records.filter((a) => a.DATE >= statsStartDate);
-      }
-      if (statsEndDate) {
-        records = records.filter((a) => a.DATE <= statsEndDate);
-      }
+      const userKey = String(student.USER_CODE || "");
+      const records = attendanceByUser.get(userKey) || [];
 
       const total = records.length;
       const missaPresent = records.filter((a) => a.MISSA_YN).length;

@@ -178,12 +178,17 @@ const Accounting = () => {
   });
 
   const summary = useMemo(() => {
-    const income = entries
-      .filter((e) => e.TYPE === "income")
-      .reduce((sum, e) => sum + e.AMOUNT, 0);
-    const expense = entries
-      .filter((e) => e.TYPE === "expense")
-      .reduce((sum, e) => sum + e.AMOUNT, 0);
+    const { income, expense } = entries.reduce(
+      (acc, entry) => {
+        if (entry.TYPE === "income") {
+          acc.income += entry.AMOUNT;
+        } else if (entry.TYPE === "expense") {
+          acc.expense += entry.AMOUNT;
+        }
+        return acc;
+      },
+      { income: 0, expense: 0 },
+    );
     return { income, expense, balance: income - expense };
   }, [entries]);
 
