@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { toRenderableHtml } from "@/utils/html";
 import { Plus, Trash2, Bell, ArrowLeft, ChevronDown } from "lucide-react";
 
 const Notification = () => {
@@ -378,8 +379,10 @@ const Notification = () => {
           </div>
           <hr className="my-4" />
           <div
-            className="prose prose-sm max-w-none text-sm leading-relaxed mb-6"
-            dangerouslySetInnerHTML={{ __html: selectedNotification.CONTENT }}
+            className="rich-html mb-6"
+            dangerouslySetInnerHTML={{
+              __html: toRenderableHtml(selectedNotification.CONTENT),
+            }}
           />
           <div className="flex gap-3">
             {canEditDelete && (

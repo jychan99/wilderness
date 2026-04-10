@@ -110,6 +110,62 @@
 }
 
 @layer components {
+  .rich-html {
+    @apply max-w-none text-sm leading-relaxed;
+  }
+
+  .rich-html h1,
+  .rich-html h2,
+  .rich-html h3,
+  .rich-html h4,
+  .rich-html h5,
+  .rich-html h6 {
+    @apply font-heading text-foreground;
+    line-height: 1.35;
+    margin-top: 0.9em;
+    margin-bottom: 0.45em;
+  }
+
+  .rich-html h1 {
+    @apply text-2xl font-bold;
+  }
+
+  .rich-html h2 {
+    @apply text-xl font-bold;
+  }
+
+  .rich-html h3 {
+    @apply text-lg font-semibold;
+  }
+
+  .rich-html p {
+    margin: 0.45em 0;
+  }
+
+  .rich-html ul,
+  .rich-html ol {
+    margin: 0.5em 0;
+    padding-left: 1.2rem;
+  }
+
+  .rich-html ul {
+    list-style: disc;
+  }
+
+  .rich-html ol {
+    list-style: decimal;
+  }
+
+  .rich-html blockquote {
+    @apply border-l-2 border-border text-muted-foreground;
+    margin: 0.6em 0;
+    padding-left: 0.75rem;
+  }
+
+  .rich-html a {
+    @apply text-primary underline;
+  }
+
   .card-classic {
     @apply bg-card border border-border shadow-sm;
     border-radius: var(--radius);

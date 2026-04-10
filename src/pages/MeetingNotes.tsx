@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { toRenderableHtml } from "@/utils/html";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
@@ -370,8 +371,10 @@ const MeetingNotes = () => {
           </div>
           <hr className="border-border mb-4" />
           <div
-            className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground/85"
-            dangerouslySetInnerHTML={{ __html: selectedNote.CONTENT }}
+            className="rich-html text-foreground/85"
+            dangerouslySetInnerHTML={{
+              __html: toRenderableHtml(selectedNote.CONTENT),
+            }}
           />
         </div>
       </div>

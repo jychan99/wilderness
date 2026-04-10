@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { toRenderableHtml } from "@/utils/html";
 
 interface DashboardProps {
   onTabChange?: (tab: string) => void;
@@ -669,9 +670,13 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
           <Loader2 className="w-4 h-4 animate-spin" />
         </div>
       ) : adminNotifications.length > 0 ? (
-        <p className="font-bold text-sm" style={{ color: "#2563eb" }}>
-          {adminNotifications[0].CONTENT}
-        </p>
+        <div
+          className="rich-html font-bold"
+          style={{ color: "#2563eb" }}
+          dangerouslySetInnerHTML={{
+            __html: toRenderableHtml(adminNotifications[0].CONTENT),
+          }}
+        />
       ) : (
         <p className="text-sm text-muted-foreground"> 업데이트가 없습니다. </p>
       )}
@@ -702,9 +707,12 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
                 ).toLocaleDateString("ko-KR")}
               </span>
             </div>
-            <p className="text-sm text-foreground/80 mb-2">
-              {chairmanNotifications[0].CONTENT}
-            </p>
+            <div
+              className="rich-html text-foreground/80 mb-2"
+              dangerouslySetInnerHTML={{
+                __html: toRenderableHtml(chairmanNotifications[0].CONTENT),
+              }}
+            />
           </div>
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">
@@ -1193,9 +1201,12 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
                 {latestMeeting.DATE.split("T")[0]}
               </span>
             </div>
-            <pre className="text-sm whitespace-pre-wrap font-body text-foreground/80">
-              {latestMeeting.CONTENT}
-            </pre>
+            <div
+              className="rich-html font-body text-foreground/80"
+              dangerouslySetInnerHTML={{
+                __html: toRenderableHtml(latestMeeting.CONTENT),
+              }}
+            />
           </div>
         ) : (
           <p className="text-center text-sm text-muted-foreground py-8">
