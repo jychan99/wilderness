@@ -29,6 +29,7 @@ import {
   X,
   Bell,
   MessageSquareText,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -135,6 +136,12 @@ const Layout = ({ children }: LayoutProps) => {
       label: "관리자",
       icon: Settings,
       show: canAccessMenu(user.position, "admin"),
+    },
+    {
+      id: "updatehistory",
+      label: "업데이트 내역",
+      icon: History,
+      show: canAccessMenu(user.position, "updatehistory"),
     },
   ];
 

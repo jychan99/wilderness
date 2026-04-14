@@ -7,6 +7,7 @@ import { toRenderableHtml } from "@/utils/html";
 
 type UserWithGrades = USER_MAIN & { MANAGE_GRADES: string[] };
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,6 +43,32 @@ type ConfirmDialogState = {
 const Admin = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const toLocalDateTimeValue = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const getDefaultPopupForm = () => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(9, 0, 0, 0);
+
+    const end = new Date(now);
+    end.setDate(end.getDate() + 1);
+    end.setHours(18, 0, 0, 0);
+
+    return {
+      enabled: false,
+      startAt: toLocalDateTimeValue(start),
+      endAt: toLocalDateTimeValue(end),
+    };
+  };
+
   const [showAdd, setShowAdd] = useState(false);
   const [selectedNotification, setSelectedNotification] =
     useState<NOTIFICATION | null>(null);
@@ -59,9 +86,13 @@ const Admin = () => {
     title: "",
     content: "",
   });
+  const [popupForm, setPopupForm] = useState(getDefaultPopupForm);
   const [editForm, setEditForm] = useState({
     title: "",
     content: "",
+    popupEnabled: false,
+    popupStartAt: "",
+    popupEndAt: "",
   });
   const [expandedMonthSections, setExpandedMonthSections] = useState<
     Record<string, boolean>
@@ -280,6 +311,7 @@ const Admin = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       setNotificationForm({ title: "", content: "" });
+      setPopupForm(getDefaultPopupForm());
       setShowAdd(false);
     },
     onError: (error) => {
@@ -320,12 +352,21 @@ const Admin = () => {
 
   // 공지사항 수정 mutation
   const updateNotificationMutation = useMutation({
-    mutationFn: async (updatedNotification: NOTIFICATION) => {
+    mutationFn: async (
+      updatedNotification: NOTIFICATION & {
+        POPUP_YN: boolean;
+        POPUP_START_AT: string | null;
+        POPUP_END_AT: string | null;
+      },
+    ) => {
       const { error } = await (supabase as any)
         .from("NOTIFICATION")
         .update({
           TITLE: updatedNotification.TITLE,
           CONTENT: updatedNotification.CONTENT,
+          POPUP_YN: updatedNotification.POPUP_YN,
+          POPUP_START_AT: updatedNotification.POPUP_START_AT,
+          POPUP_END_AT: updatedNotification.POPUP_END_AT,
         })
         .eq("ID", updatedNotification.ID);
       if (error) throw error;
@@ -404,14 +445,34 @@ const Admin = () => {
       return;
     }
 
+    if (popupForm.enabled) {
+      if (!popupForm.startAt || !popupForm.endAt) {
+        toast({
+          title: "입력 필요",
+          description: "팝업 공지 기간(시작/종료)을 입력해주세요.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (new Date(popupForm.startAt) > new Date(popupForm.endAt)) {
+        toast({
+          title: "기간 오류",
+          description: "팝업 시작일은 종료일보다 늦을 수 없습니다.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     addNotificationMutation.mutate({
       TITLE: notificationForm.title.trim(),
       CONTENT: notificationForm.content,
       AUTHOR: "관리자",
       POSITION: "0",
-      POPUP_YN: false,
-      POPUP_START_AT: null,
-      POPUP_END_AT: null,
+      POPUP_YN: popupForm.enabled,
+      POPUP_START_AT: popupForm.enabled ? popupForm.startAt : null,
+      POPUP_END_AT: popupForm.enabled ? popupForm.endAt : null,
     });
   };
 
@@ -440,6 +501,13 @@ const Admin = () => {
     setEditForm({
       title: selectedNotification.TITLE,
       content: selectedNotification.CONTENT,
+      popupEnabled: selectedNotification.POPUP_YN || false,
+      popupStartAt: selectedNotification.POPUP_START_AT
+        ? toLocalDateTimeValue(new Date(selectedNotification.POPUP_START_AT))
+        : "",
+      popupEndAt: selectedNotification.POPUP_END_AT
+        ? toLocalDateTimeValue(new Date(selectedNotification.POPUP_END_AT))
+        : "",
     });
     setIsEditMode(true);
   };
@@ -452,24 +520,59 @@ const Admin = () => {
     )
       return;
 
+    if (editForm.popupEnabled) {
+      if (!editForm.popupStartAt || !editForm.popupEndAt) {
+        toast({
+          title: "입력 필요",
+          description: "팝업 공지 기간(시작/종료)을 입력해주세요.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (new Date(editForm.popupStartAt) > new Date(editForm.popupEndAt)) {
+        toast({
+          title: "기간 오류",
+          description: "팝업 시작일은 종료일보다 늦을 수 없습니다.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     updateNotificationMutation.mutate({
       ...selectedNotification,
       TITLE: editForm.title.trim(),
       CONTENT: editForm.content,
+      POPUP_YN: editForm.popupEnabled,
+      POPUP_START_AT: editForm.popupEnabled ? editForm.popupStartAt : null,
+      POPUP_END_AT: editForm.popupEnabled ? editForm.popupEndAt : null,
     });
     setIsEditMode(false);
   };
 
   const handleEditCancel = () => {
     setIsEditMode(false);
-    setEditForm({ title: "", content: "" });
+    setEditForm({
+      title: "",
+      content: "",
+      popupEnabled: false,
+      popupStartAt: "",
+      popupEndAt: "",
+    });
   };
 
   const handleCloseDetail = () => {
     setSelectedNotification(null);
     setIsDetailMode(false);
     setIsEditMode(false);
-    setEditForm({ title: "", content: "" });
+    setEditForm({
+      title: "",
+      content: "",
+      popupEnabled: false,
+      popupStartAt: "",
+      popupEndAt: "",
+    });
     setActiveTab("notices");
   };
 
@@ -563,6 +666,58 @@ const Admin = () => {
                 minHeight="220px"
               />
             </div>
+
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-popup-notice"
+                  checked={editForm.popupEnabled}
+                  onCheckedChange={(checked) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      popupEnabled: checked === true,
+                    }))
+                  }
+                />
+                <Label htmlFor="edit-popup-notice" className="cursor-pointer">
+                  팝업공지
+                </Label>
+              </div>
+
+              {editForm.popupEnabled && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-popup-start-at">팝업 시작일시</Label>
+                    <Input
+                      id="edit-popup-start-at"
+                      type="datetime-local"
+                      value={editForm.popupStartAt}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          popupStartAt: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-popup-end-at">팝업 종료일시</Label>
+                    <Input
+                      id="edit-popup-end-at"
+                      type="datetime-local"
+                      value={editForm.popupEndAt}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          popupEndAt: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3">
               <Button onClick={handleEditSave} className="flex-1">
                 저장
@@ -590,6 +745,7 @@ const Admin = () => {
           onClick={() => {
             setShowAdd(false);
             setNotificationForm({ title: "", content: "" });
+            setPopupForm(getDefaultPopupForm());
             setActiveTab("notices");
           }}
         >
@@ -628,6 +784,58 @@ const Admin = () => {
                 minHeight="220px"
               />
             </div>
+
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="admin-popup-notice"
+                  checked={popupForm.enabled}
+                  onCheckedChange={(checked) =>
+                    setPopupForm((prev) => ({
+                      ...prev,
+                      enabled: checked === true,
+                    }))
+                  }
+                />
+                <Label htmlFor="admin-popup-notice" className="cursor-pointer">
+                  팝업공지
+                </Label>
+              </div>
+
+              {popupForm.enabled && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="popup-start-at">팝업 시작일시</Label>
+                    <Input
+                      id="popup-start-at"
+                      type="datetime-local"
+                      value={popupForm.startAt}
+                      onChange={(e) =>
+                        setPopupForm((prev) => ({
+                          ...prev,
+                          startAt: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="popup-end-at">팝업 종료일시</Label>
+                    <Input
+                      id="popup-end-at"
+                      type="datetime-local"
+                      value={popupForm.endAt}
+                      onChange={(e) =>
+                        setPopupForm((prev) => ({
+                          ...prev,
+                          endAt: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3">
               <Button
                 onClick={handleAddNotification}
@@ -642,6 +850,7 @@ const Admin = () => {
                 onClick={() => {
                   setShowAdd(false);
                   setNotificationForm({ title: "", content: "" });
+                  setPopupForm(getDefaultPopupForm());
                 }}
               >
                 취소
@@ -871,6 +1080,7 @@ const Admin = () => {
                 setIsDetailMode(false);
                 setIsEditMode(false);
                 setNotificationForm({ title: "", content: "" });
+                setPopupForm(getDefaultPopupForm());
                 setShowAdd(true);
               }}
             >
@@ -924,9 +1134,16 @@ const Admin = () => {
                                 <Bell className="w-4.5 h-4.5 text-primary" />
                               </div>
                               <div className="flex-1">
-                                <h4 className="font-medium text-sm mb-1">
-                                  {notification.TITLE}
-                                </h4>
+                                <div className="mb-1 flex items-center gap-2">
+                                  <h4 className="font-medium text-sm">
+                                    {notification.TITLE}
+                                  </h4>
+                                  {notification.POPUP_YN && (
+                                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                      팝업공지
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-xs text-muted-foreground mb-2">
                                   {getPlainText(notification.CONTENT)}
                                 </p>

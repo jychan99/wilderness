@@ -10,6 +10,7 @@ import MeetingNotes from "@/pages/MeetingNotes";
 import Accounting from "@/pages/Accounting";
 import Admin from "@/pages/Admin";
 import Notification from "@/pages/Notification";
+import UpdateHistory from "@/pages/UpdateHistory";
 import FreeBoard from "@/pages/FreeBoard";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -95,6 +96,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute menuKey="freeboard">
               <FreeBoard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/updatehistory"
+          element={
+            <ProtectedRoute menuKey="updatehistory">
+              <UpdateHistory />
             </ProtectedRoute>
           }
         />

@@ -42,6 +42,10 @@ export const MENU_PERMISSIONS = {
     label: "관리자",
     allowedPositions: ["0"], // 관리자 ONLY
   },
+  updatehistory: {
+    label: "업데이트 내역",
+    allowedPositions: ["1", "2", "3", "4", "5"], // ALL(관리자 제외)
+  },
 };
 
 // 사용자가 특정 메뉴에 접근 가능한지 확인

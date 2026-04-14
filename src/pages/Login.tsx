@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { USER_MAIN } from "@/types";
+import { USER_MAIN, NOTIFICATION } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Church, Palette } from "lucide-react";
+import { toRenderableHtml } from "@/utils/html";
 import { hashPassword } from "@/utils/password";
 
 type ThemeName =
@@ -273,6 +275,7 @@ const applyTheme = (themeName: ThemeName) => {
 };
 
 const Login = () => {
+  const navigate = useNavigate();
   const { login } = useAuth();
   const { toast } = useToast();
   const [username, setUsername] = useState("");
@@ -281,6 +284,8 @@ const Login = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isThemeOpen, setIsThemeOpen] = useState(false);
+  const [popupNotice, setPopupNotice] = useState<NOTIFICATION | null>(null);
+  const [showPopupNotice, setShowPopupNotice] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ThemeName>("aliceblue");
   const [form, setForm] = useState({
     name: "",
@@ -307,6 +312,53 @@ const Login = () => {
     applyTheme(themeName);
     localStorage.setItem(THEME_STORAGE_KEY, themeName);
   };
+
+  const isTodayInPopupRange = (
+    startAt: string | null,
+    endAt: string | null,
+  ) => {
+    if (!startAt || !endAt) return false;
+
+    const start = new Date(startAt);
+    const end = new Date(endAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return false;
+    }
+
+    const now = new Date();
+    return now >= start && now <= end;
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPopupNotice = async () => {
+      const { data, error } = await supabase
+        .from("NOTIFICATION")
+        .select("*")
+        .eq("POSITION", "0")
+        .eq("POPUP_YN", true)
+        .order("CREATED_AT", { ascending: false });
+
+      if (error || !data || data.length === 0 || !isMounted) return;
+
+      const notices = data as NOTIFICATION[];
+      const todayPopup = notices.find((item) =>
+        isTodayInPopupRange(item.POPUP_START_AT, item.POPUP_END_AT),
+      );
+
+      if (todayPopup) {
+        setPopupNotice(todayPopup);
+        setShowPopupNotice(true);
+      }
+    };
+
+    fetchPopupNotice();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleAddUser = async () => {
     if (!form.username.trim() || !form.password.trim() || !form.name.trim()) {
@@ -375,6 +427,8 @@ const Login = () => {
         return;
       }
       setError("아이디 또는 비밀번호가 올바르지 않습니다.");
+    } else {
+      navigate("/dashboard");
     }
   };
 
@@ -516,6 +570,31 @@ const Login = () => {
           </div>
         </div>
       </div>
+
+      <Dialog open={showPopupNotice} onOpenChange={setShowPopupNotice}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-heading">팝업 공지사항</DialogTitle>
+          </DialogHeader>
+          {popupNotice && (
+            <div className="space-y-3">
+              <p className="text-base font-semibold">{popupNotice.TITLE}</p>
+              <div
+                className="rich-html"
+                dangerouslySetInnerHTML={{
+                  __html: toRenderableHtml(popupNotice.CONTENT),
+                }}
+              />
+              <Button
+                onClick={() => setShowPopupNotice(false)}
+                className="w-full"
+              >
+                확인
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="fixed right-5 bottom-5 z-50 flex flex-col items-end gap-2">
         {isThemeOpen && (
