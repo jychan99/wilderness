@@ -128,6 +128,9 @@ const Notification = () => {
       CONTENT: notificationForm.content,
       AUTHOR: user?.name || "회장",
       POSITION: "1",
+      POPUP_YN: false,
+      POPUP_START_AT: null,
+      POPUP_END_AT: null,
     });
   };
 

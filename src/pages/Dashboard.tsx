@@ -663,25 +663,6 @@ const Dashboard = ({ onTabChange }: DashboardProps = {}) => {
 
   return (
     <div className="space-y-6">
-      {/* Admin notice */}
-      {/* <div className="card-classic p-4"> */}
-      {adminNotificationsLoading ? (
-        <div className="flex items-center justify-center py-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-        </div>
-      ) : adminNotifications.length > 0 ? (
-        <div
-          className="rich-html font-bold"
-          style={{ color: "#2563eb" }}
-          dangerouslySetInnerHTML={{
-            __html: toRenderableHtml(adminNotifications[0].CONTENT),
-          }}
-        />
-      ) : (
-        <p className="text-sm text-muted-foreground"> 업데이트가 없습니다. </p>
-      )}
-      {/* </div> */}
-
       {/* Chairman Notifications */}
       <div className="card-classic p-5">
         <button

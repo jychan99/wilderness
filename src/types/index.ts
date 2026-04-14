@@ -112,6 +112,9 @@ export interface NOTIFICATION {
   AUTHOR: string;
   POSITION: string;
   CREATED_AT: string;
+  POPUP_YN: boolean;
+  POPUP_START_AT: string | null;
+  POPUP_END_AT: string | null;
 }
 
 //담당학년 정보

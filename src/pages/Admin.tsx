@@ -2,18 +2,13 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { USER_MAIN, NOTIFICATION } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { toRenderableHtml } from "@/utils/html";
 
 type UserWithGrades = USER_MAIN & { MANAGE_GRADES: string[] };
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus,
@@ -47,9 +42,10 @@ type ConfirmDialogState = {
 const Admin = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [showNotification, setShowNotification] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
   const [selectedNotification, setSelectedNotification] =
     useState<NOTIFICATION | null>(null);
+  const [isDetailMode, setIsDetailMode] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     open: false,
@@ -70,6 +66,7 @@ const Admin = () => {
   const [expandedMonthSections, setExpandedMonthSections] = useState<
     Record<string, boolean>
   >({});
+  const [activeTab, setActiveTab] = useState("admins");
 
   const codeToLabel = (code: string): string => {
     const codeMap: { [key: string]: string } = {
@@ -283,7 +280,7 @@ const Admin = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       setNotificationForm({ title: "", content: "" });
-      setShowNotification(false);
+      setShowAdd(false);
     },
     onError: (error) => {
       toast({
@@ -335,9 +332,16 @@ const Admin = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      setEditForm({ title: "", content: "" });
-      setIsEditMode(false);
-      setSelectedNotification(null);
+      if (selectedNotification) {
+        supabase
+          .from("NOTIFICATION")
+          .select("*")
+          .eq("ID", selectedNotification.ID)
+          .single()
+          .then(({ data }) => {
+            if (data) setSelectedNotification(data);
+          });
+      }
     },
     onError: (error) => {
       toast({
@@ -388,7 +392,10 @@ const Admin = () => {
   };
 
   const handleAddNotification = () => {
-    if (!notificationForm.title || !notificationForm.content) {
+    if (
+      !notificationForm.title.trim() ||
+      !getPlainText(notificationForm.content)
+    ) {
       toast({
         title: "입력 필요",
         description: "제목과 내용을 입력해주세요.",
@@ -398,10 +405,13 @@ const Admin = () => {
     }
 
     addNotificationMutation.mutate({
-      TITLE: notificationForm.title,
+      TITLE: notificationForm.title.trim(),
       CONTENT: notificationForm.content,
       AUTHOR: "관리자",
       POSITION: "0",
+      POPUP_YN: false,
+      POPUP_START_AT: null,
+      POPUP_END_AT: null,
     });
   };
 
@@ -411,30 +421,56 @@ const Admin = () => {
       description: "정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
       actionLabel: "삭제",
       actionVariant: "destructive",
-      onConfirm: () => deleteNotificationMutation.mutate(notificationId),
+      onConfirm: () => {
+        deleteNotificationMutation.mutate(notificationId);
+        setSelectedNotification(null);
+        setIsDetailMode(false);
+      },
     });
   };
 
-  const handleEditStart = (notification: NOTIFICATION) => {
+  const handleShowDetail = (notification: NOTIFICATION) => {
     setSelectedNotification(notification);
-    setEditForm({ title: notification.TITLE, content: notification.CONTENT });
+    setIsDetailMode(true);
+    setIsEditMode(false);
+  };
+
+  const handleEditStart = () => {
+    if (!selectedNotification) return;
+    setEditForm({
+      title: selectedNotification.TITLE,
+      content: selectedNotification.CONTENT,
+    });
     setIsEditMode(true);
   };
 
   const handleEditSave = () => {
-    if (!editForm.title || !editForm.content || !selectedNotification) return;
+    if (
+      !editForm.title.trim() ||
+      !getPlainText(editForm.content) ||
+      !selectedNotification
+    )
+      return;
 
     updateNotificationMutation.mutate({
       ...selectedNotification,
-      TITLE: editForm.title,
+      TITLE: editForm.title.trim(),
       CONTENT: editForm.content,
     });
+    setIsEditMode(false);
   };
 
   const handleEditCancel = () => {
     setIsEditMode(false);
-    setSelectedNotification(null);
     setEditForm({ title: "", content: "" });
+  };
+
+  const handleCloseDetail = () => {
+    setSelectedNotification(null);
+    setIsDetailMode(false);
+    setIsEditMode(false);
+    setEditForm({ title: "", content: "" });
+    setActiveTab("notices");
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -484,11 +520,24 @@ const Admin = () => {
     }));
   };
 
+  const getPlainText = (html: string) =>
+    html
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .trim();
+
   // 수정 모드
   if (isEditMode && selectedNotification) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={handleEditCancel}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            handleEditCancel();
+            setActiveTab("notices");
+          }}
+        >
           <ArrowLeft className="w-4 h-4 mr-1.5" />
           취소
         </Button>
@@ -507,13 +556,11 @@ const Admin = () => {
             </div>
             <div className="space-y-1.5">
               <Label>내용</Label>
-              <Textarea
+              <RichTextEditor
                 value={editForm.content}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, content: e.target.value })
-                }
+                onChange={(html) => setEditForm({ ...editForm, content: html })}
                 placeholder="공지사항 내용을 작성하세요"
-                className="min-h-[200px]"
+                minHeight="220px"
               />
             </div>
             <div className="flex gap-3">
@@ -528,6 +575,126 @@ const Admin = () => {
                 취소
               </Button>
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showAdd) {
+    return (
+      <div className="space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setShowAdd(false);
+            setNotificationForm({ title: "", content: "" });
+            setActiveTab("notices");
+          }}
+        >
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          목록으로
+        </Button>
+        <div className="card-classic p-6">
+          <h2 className="font-heading text-xl font-bold mb-4">
+            관리자 공지사항 등록
+          </h2>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>제목</Label>
+              <Input
+                value={notificationForm.title}
+                onChange={(e) =>
+                  setNotificationForm({
+                    ...notificationForm,
+                    title: e.target.value,
+                  })
+                }
+                placeholder="공지사항 제목"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>내용</Label>
+              <RichTextEditor
+                value={notificationForm.content}
+                onChange={(html) =>
+                  setNotificationForm({
+                    ...notificationForm,
+                    content: html,
+                  })
+                }
+                placeholder="공지사항 내용을 작성하세요"
+                minHeight="220px"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleAddNotification}
+                className="flex-1"
+                disabled={addNotificationMutation.isPending}
+              >
+                {addNotificationMutation.isPending ? "등록 중..." : "등록 완료"}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowAdd(false);
+                  setNotificationForm({ title: "", content: "" });
+                }}
+              >
+                취소
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isDetailMode && selectedNotification) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={handleCloseDetail}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          목록으로
+        </Button>
+        <div className="card-classic p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start gap-3 flex-1">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <Bell className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-heading text-xl font-bold mb-2">
+                  {selectedNotification.TITLE}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {formatDateTime(selectedNotification.CREATED_AT)} ·{" "}
+                  {selectedNotification.AUTHOR}
+                </p>
+              </div>
+            </div>
+          </div>
+          <hr className="my-4" />
+          <div
+            className="rich-html mb-6"
+            dangerouslySetInnerHTML={{
+              __html: toRenderableHtml(selectedNotification.CONTENT),
+            }}
+          />
+          <div className="flex gap-3">
+            <Button onClick={handleEditStart} className="flex-1">
+              수정
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCloseDetail}
+              className="flex-1"
+            >
+              취소
+            </Button>
           </div>
         </div>
       </div>
@@ -576,246 +743,225 @@ const Admin = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* User list */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium">관리자 계정</p>
-          <p className="text-sm text-muted-foreground">총 {admins.length}명</p>
-        </div>
-        <div className="space-y-2">
-          {admins.map((u) => (
-            <div
-              key={u.USER_CODE}
-              className="card-classic p-4 flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Users className="w-4.5 h-4.5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm">
-                    {u.NAME}{" "}
-                    <span className="text-muted-foreground">
-                      ({u.BAP_NAME})
-                    </span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {numberToPosition(u.POSITION)} ·{" "}
-                    {u.MANAGE_GRADES.length > 0
-                      ? u.MANAGE_GRADES.length <= 2
-                        ? u.MANAGE_GRADES.join(", ")
-                        : `${u.MANAGE_GRADES.slice(0, 2).join(", ")} 외 ${u.MANAGE_GRADES.length - 2}개`
-                      : "학년없음"}{" "}
-                    · @{u.ID}
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive"
-                onClick={() => handleDelete(u.USER_CODE)}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          ))}
-          {admins.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground text-sm">
-              등록된 사용자가 없습니다.
-            </div>
-          )}
-        </div>
-      </div>
-      {/* Separator */}
-      <hr className="border-t border-border" />
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-4"
+      >
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="admins">관리자 목록</TabsTrigger>
+          <TabsTrigger value="pending">가입 허가</TabsTrigger>
+          <TabsTrigger value="notices">관리자 공지사항</TabsTrigger>
+        </TabsList>
 
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium">가입 승인 대기</p>
-          <p className="text-sm text-muted-foreground">
-            총 {pendingUsers.length}명
-          </p>
-        </div>
-        <div className="space-y-2">
-          {pendingUsers.map((u) => (
-            <div
-              key={u.USER_CODE}
-              className="card-classic p-4 flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Users className="w-4.5 h-4.5 text-primary" />
+        <TabsContent value="admins" className="space-y-3">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium">관리자 계정</p>
+            <p className="text-sm text-muted-foreground">
+              총 {admins.length}명
+            </p>
+          </div>
+          <div className="space-y-2">
+            {admins.map((u) => (
+              <div
+                key={u.USER_CODE}
+                className="card-classic p-4 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Users className="w-4.5 h-4.5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">
+                      {u.NAME}{" "}
+                      <span className="text-muted-foreground">
+                        ({u.BAP_NAME})
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {numberToPosition(u.POSITION)} ·{" "}
+                      {u.MANAGE_GRADES.length > 0
+                        ? u.MANAGE_GRADES.length <= 2
+                          ? u.MANAGE_GRADES.join(", ")
+                          : `${u.MANAGE_GRADES.slice(0, 2).join(", ")} 외 ${u.MANAGE_GRADES.length - 2}개`
+                        : "학년없음"}{" "}
+                      · @{u.ID}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-sm">
-                    {u.NAME}{" "}
-                    <span className="text-muted-foreground">
-                      ({u.BAP_NAME})
-                    </span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">@{u.ID}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
                 <Button
-                  size="sm"
-                  onClick={() => handleApproveUser(u.USER_CODE)}
-                  disabled={approveUserMutation.isPending}
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive"
+                  onClick={() => handleDelete(u.USER_CODE)}
                 >
-                  승인
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleRejectUser(u.USER_CODE)}
-                  disabled={rejectUserMutation.isPending}
-                >
-                  거부
+                  <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
-            </div>
-          ))}
-          {pendingUsers.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground text-sm">
-              승인 대기중인 사용자가 없습니다.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Separator */}
-      <hr className="border-t border-border" />
-      {/* Notification Section */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">관리자 공지사항</p>
-        <Dialog open={showNotification} onOpenChange={setShowNotification}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              공지사항 등록
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="font-heading">공지사항 등록</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-1.5">
-                <Label>제목</Label>
-                <Input
-                  value={notificationForm.title}
-                  onChange={(e) =>
-                    setNotificationForm({
-                      ...notificationForm,
-                      title: e.target.value,
-                    })
-                  }
-                  placeholder="공지사항 제목"
-                />
+            ))}
+            {admins.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                등록된 사용자가 없습니다.
               </div>
-              <div className="space-y-1.5">
-                <Label>내용</Label>
-                <Textarea
-                  value={notificationForm.content}
-                  onChange={(e) =>
-                    setNotificationForm({
-                      ...notificationForm,
-                      content: e.target.value,
-                    })
-                  }
-                  placeholder="공지사항 내용을 작성하세요"
-                  className="min-h-[200px]"
-                />
-              </div>
-              <Button
-                onClick={handleAddNotification}
-                className="w-full"
-                disabled={addNotificationMutation.isPending}
-              >
-                {addNotificationMutation.isPending ? "등록 중..." : "등록 완료"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-      {/* Notification List */}
-      <div className="space-y-3">
-        {notificationGroupsByMonth.map((group, index) => {
-          const defaultExpanded = index === 0;
-          const isExpanded =
-            expandedMonthSections[group.key] ?? defaultExpanded;
+            )}
+          </div>
+        </TabsContent>
 
-          return (
-            <div key={group.key} className="card-classic p-0 overflow-hidden">
-              <button
-                type="button"
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                onClick={() => toggleMonthSection(group.key, defaultExpanded)}
+        <TabsContent value="pending" className="space-y-3">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium">가입 승인 대기</p>
+            <p className="text-sm text-muted-foreground">
+              총 {pendingUsers.length}명
+            </p>
+          </div>
+          <div className="space-y-2">
+            {pendingUsers.map((u) => (
+              <div
+                key={u.USER_CODE}
+                className="card-classic p-4 flex items-center justify-between"
               >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Users className="w-4.5 h-4.5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">
+                      {u.NAME}{" "}
+                      <span className="text-muted-foreground">
+                        ({u.BAP_NAME})
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">@{u.ID}</p>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform ${
-                      isExpanded ? "rotate-0" : "-rotate-90"
-                    }`}
-                  />
-                  <p className="text-sm font-medium">{group.label}</p>
+                  <Button
+                    size="sm"
+                    onClick={() => handleApproveUser(u.USER_CODE)}
+                    disabled={approveUserMutation.isPending}
+                  >
+                    승인
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => handleRejectUser(u.USER_CODE)}
+                    disabled={rejectUserMutation.isPending}
+                  >
+                    거부
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {group.items.length}개
-                </p>
-              </button>
+              </div>
+            ))}
+            {pendingUsers.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                승인 대기중인 사용자가 없습니다.
+              </div>
+            )}
+          </div>
+        </TabsContent>
 
-              {isExpanded && (
-                <div className="border-t border-border p-2 space-y-2">
-                  {group.items.map((notification) => (
-                    <div
-                      key={notification.ID}
-                      className="p-3 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => handleEditStart(notification)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3 flex-1">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
-                            <Bell className="w-4.5 h-4.5 text-primary" />
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-medium text-sm mb-1">
-                              {notification.TITLE}
-                            </h4>
-                            <p className="text-xs text-muted-foreground mb-2">
-                              {notification.CONTENT}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDateTime(notification.CREATED_AT)}
-                            </p>
+        <TabsContent value="notices" className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">관리자 공지사항</p>
+            <Button
+              size="sm"
+              onClick={() => {
+                setSelectedNotification(null);
+                setIsDetailMode(false);
+                setIsEditMode(false);
+                setNotificationForm({ title: "", content: "" });
+                setShowAdd(true);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              관리자 공지사항 등록
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {notificationGroupsByMonth.map((group, index) => {
+              const defaultExpanded = index === 0;
+              const isExpanded =
+                expandedMonthSections[group.key] ?? defaultExpanded;
+
+              return (
+                <div
+                  key={group.key}
+                  className="card-classic p-0 overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                    onClick={() =>
+                      toggleMonthSection(group.key, defaultExpanded)
+                    }
+                  >
+                    <div className="flex items-center gap-2">
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform ${
+                          isExpanded ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                      <p className="text-sm font-medium">{group.label}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {group.items.length}개
+                    </p>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-border p-2 space-y-2">
+                      {group.items.map((notification) => (
+                        <div
+                          key={notification.ID}
+                          className="p-3 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => handleShowDetail(notification)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-3 flex-1">
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+                                <Bell className="w-4.5 h-4.5 text-primary" />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-medium text-sm mb-1">
+                                  {notification.TITLE}
+                                </h4>
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  {getPlainText(notification.CONTENT)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDateTime(notification.CREATED_AT)}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteNotification(notification.ID);
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteNotification(notification.ID);
-                          }}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-        {notificationGroupsByMonth.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground text-sm">
-            등록된 공지사항이 없습니다.
+              );
+            })}
+            {notificationGroupsByMonth.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                등록된 공지사항이 없습니다.
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

@@ -161,6 +161,9 @@ export type Database = {
           AUTHOR: string;
           POSITION: string;
           CREATED_AT: string;
+          POPUP_YN: boolean;
+          POPUP_START_AT: string | null;
+          POPUP_END_AT: string | null;
         };
         Insert: {
           ID: string;
@@ -169,6 +172,9 @@ export type Database = {
           AUTHOR: string;
           POSITION: string;
           CREATED_AT: string;
+          POPUP_YN: boolean;
+          POPUP_START_AT: string | null;
+          POPUP_END_AT: string | null;
         };
         Update: {
           ID?: string;
@@ -177,6 +183,9 @@ export type Database = {
           AUTHOR?: string;
           POSITION?: string;
           CREATED_AT?: string;
+          POPUP_YN?: boolean;
+          POPUP_START_AT?: string | null;
+          POPUP_END_AT?: string | null;
         };
       };
       USER_MAIN: {
