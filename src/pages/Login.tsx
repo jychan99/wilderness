@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Church, Palette } from "lucide-react";
-import { toRenderableHtml } from "@/utils/html";
 import { hashPassword } from "@/utils/password";
 
 type ThemeName =
@@ -28,6 +27,18 @@ type ThemeName =
   | "indigo";
 
 const THEME_STORAGE_KEY = "erp-theme-color";
+const THEME_VARS_STORAGE_KEY = "erp-theme-vars";
+const POPUP_NOTICE_PATH = "/popup-notice";
+const POPUP_NOTICE_ONCE_KEY = "erp-popup-notice-opened";
+const POPUP_NOTICE_HIDE_TODAY_KEY = "erp-popup-notice-hide-today";
+
+const getTodayKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const THEME_PRESETS: Record<
   ThemeName,
@@ -284,8 +295,7 @@ const Login = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isThemeOpen, setIsThemeOpen] = useState(false);
-  const [popupNotice, setPopupNotice] = useState<NOTIFICATION | null>(null);
-  const [showPopupNotice, setShowPopupNotice] = useState(false);
+  const [canManuallyOpenPopup, setCanManuallyOpenPopup] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ThemeName>("aliceblue");
   const [form, setForm] = useState({
     name: "",
@@ -305,12 +315,20 @@ const Login = () => {
     setSelectedTheme(themeToApply);
     applyTheme(themeToApply);
     localStorage.setItem(THEME_STORAGE_KEY, themeToApply);
+    localStorage.setItem(
+      THEME_VARS_STORAGE_KEY,
+      JSON.stringify(THEME_PRESETS[themeToApply].vars),
+    );
   }, []);
 
   const handleThemeChange = (themeName: ThemeName) => {
     setSelectedTheme(themeName);
     applyTheme(themeName);
     localStorage.setItem(THEME_STORAGE_KEY, themeName);
+    localStorage.setItem(
+      THEME_VARS_STORAGE_KEY,
+      JSON.stringify(THEME_PRESETS[themeName].vars),
+    );
   };
 
   const isTodayInPopupRange = (
@@ -329,27 +347,69 @@ const Login = () => {
     return now >= start && now <= end;
   };
 
+  const openPopupNoticeWindow = (source: "auto" | "manual") => {
+    if (sessionStorage.getItem(POPUP_NOTICE_ONCE_KEY) === "1") return;
+    if (localStorage.getItem(POPUP_NOTICE_HIDE_TODAY_KEY) === getTodayKey())
+      return;
+
+    const width = 560;
+    const height = 760;
+    const left = Math.max(0, (window.screen.width - width) / 2);
+    const top = Math.max(0, (window.screen.height - height) / 2);
+    const features = [
+      `width=${width}`,
+      `height=${height}`,
+      `left=${Math.floor(left)}`,
+      `top=${Math.floor(top)}`,
+      "resizable=yes",
+      "scrollbars=yes",
+      "noopener",
+      "noreferrer",
+    ].join(",");
+
+    const popup = window.open(POPUP_NOTICE_PATH, "erp_popup_notice", features);
+
+    if (!popup) {
+      if (source === "manual") {
+        toast({
+          title: "팝업 열기 실패",
+          description:
+            "브라우저에서 팝업이 차단되었습니다. 사이트 팝업 허용 후 다시 시도해주세요.",
+          variant: "destructive",
+        });
+      }
+      setCanManuallyOpenPopup(true);
+      return;
+    }
+
+    popup.opener = null;
+    sessionStorage.setItem(POPUP_NOTICE_ONCE_KEY, "1");
+    setCanManuallyOpenPopup(false);
+  };
+
   useEffect(() => {
     let isMounted = true;
 
     const fetchPopupNotice = async () => {
       const { data, error } = await supabase
         .from("NOTIFICATION")
-        .select("*")
+        .select("ID, POPUP_START_AT, POPUP_END_AT")
         .eq("POSITION", "0")
         .eq("POPUP_YN", true)
         .order("CREATED_AT", { ascending: false });
 
       if (error || !data || data.length === 0 || !isMounted) return;
 
-      const notices = data as NOTIFICATION[];
+      const notices = data as Pick<
+        NOTIFICATION,
+        "ID" | "POPUP_START_AT" | "POPUP_END_AT"
+      >[];
       const todayPopup = notices.find((item) =>
         isTodayInPopupRange(item.POPUP_START_AT, item.POPUP_END_AT),
       );
 
       if (todayPopup) {
-        setPopupNotice(todayPopup);
-        setShowPopupNotice(true);
+        openPopupNoticeWindow("auto");
       }
     };
 
@@ -358,7 +418,7 @@ const Login = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [toast]);
 
   const handleAddUser = async () => {
     if (!form.username.trim() || !form.password.trim() || !form.name.trim()) {
@@ -570,31 +630,6 @@ const Login = () => {
           </div>
         </div>
       </div>
-
-      <Dialog open={showPopupNotice} onOpenChange={setShowPopupNotice}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="font-heading">팝업 공지사항</DialogTitle>
-          </DialogHeader>
-          {popupNotice && (
-            <div className="space-y-3">
-              <p className="text-base font-semibold">{popupNotice.TITLE}</p>
-              <div
-                className="rich-html"
-                dangerouslySetInnerHTML={{
-                  __html: toRenderableHtml(popupNotice.CONTENT),
-                }}
-              />
-              <Button
-                onClick={() => setShowPopupNotice(false)}
-                className="w-full"
-              >
-                확인
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <div className="fixed right-5 bottom-5 z-50 flex flex-col items-end gap-2">
         {isThemeOpen && (

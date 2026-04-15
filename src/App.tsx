@@ -1,7 +1,9 @@
 import { useAuth, AuthProvider } from "@/contexts/AuthContext";
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { canAccessMenu } from "@/utils/menuPermissions";
 import Login from "@/pages/Login";
+import PopupNoticeWindow from "@/pages/PopupNoticeWindow";
 import Layout from "@/components/Layout";
 import Dashboard from "@/pages/Dashboard";
 import StudentManagement from "@/pages/StudentManagement";
@@ -21,6 +23,15 @@ const queryClient = new QueryClient();
 
 const AppContent = () => {
   const { user } = useAuth();
+  const location = useLocation();
+
+  if (location.pathname === "/popup-notice") {
+    return (
+      <Routes>
+        <Route path="/popup-notice" element={<PopupNoticeWindow />} />
+      </Routes>
+    );
+  }
 
   if (!user) return <Login />;
 
