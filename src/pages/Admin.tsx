@@ -586,6 +586,18 @@ const Admin = () => {
     });
   };
 
+  const formatPopupPeriod = (
+    startAt: string | null | undefined,
+    endAt: string | null | undefined,
+  ) => {
+    if (!startAt && !endAt) return "";
+    if (startAt && endAt) {
+      return `${formatDateTime(startAt)} ~ ${formatDateTime(endAt)}`;
+    }
+    if (startAt) return `${formatDateTime(startAt)} ~`;
+    return `~ ${formatDateTime(endAt as string)}`;
+  };
+
   const notificationGroupsByMonth = useMemo(() => {
     const grouped = new Map<string, NOTIFICATION[]>();
 
@@ -883,6 +895,17 @@ const Admin = () => {
                   {formatDateTime(selectedNotification.CREATED_AT)} ·{" "}
                   {selectedNotification.AUTHOR}
                 </p>
+                {selectedNotification.POPUP_YN &&
+                  (selectedNotification.POPUP_START_AT ||
+                    selectedNotification.POPUP_END_AT) && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      팝업 기간:{" "}
+                      {formatPopupPeriod(
+                        selectedNotification.POPUP_START_AT,
+                        selectedNotification.POPUP_END_AT,
+                      )}
+                    </p>
+                  )}
               </div>
             </div>
           </div>
@@ -1147,6 +1170,17 @@ const Admin = () => {
                                 <p className="text-xs text-muted-foreground mb-2">
                                   {getPlainText(notification.CONTENT)}
                                 </p>
+                                {notification.POPUP_YN &&
+                                  (notification.POPUP_START_AT ||
+                                    notification.POPUP_END_AT) && (
+                                    <p className="text-xs text-muted-foreground mb-1">
+                                      팝업 기간:{" "}
+                                      {formatPopupPeriod(
+                                        notification.POPUP_START_AT,
+                                        notification.POPUP_END_AT,
+                                      )}
+                                    </p>
+                                  )}
                                 <p className="text-xs text-muted-foreground">
                                   {formatDateTime(notification.CREATED_AT)}
                                 </p>
