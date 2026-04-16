@@ -123,10 +123,7 @@ const PopupNoticeWindow = () => {
     <main className="min-h-screen bg-background p-4 text-foreground">
       <div className="mx-auto max-w-2xl space-y-4">
         <header className="rounded-lg border border-border bg-card p-4">
-          <h1 className="font-heading text-xl font-bold">{title}</h1>
-          <p className="mt-1 text-xs text-muted-foreground">
-            본 창은 시스템 내부 공지 전용 팝업입니다.
-          </p>
+          <h1 className="font-heading text-xl font-bold">🔈 전체 공지</h1>
         </header>
 
         {isLoading && (

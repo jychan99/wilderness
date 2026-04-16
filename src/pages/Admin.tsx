@@ -53,6 +53,12 @@ const Admin = () => {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
+  const toUtcIsoStringFromLocalInput = (value: string) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+  };
+
   const getDefaultPopupForm = () => {
     const now = new Date();
     const start = new Date(now);
@@ -465,14 +471,21 @@ const Admin = () => {
       }
     }
 
+    const popupStartAt = popupForm.enabled
+      ? toUtcIsoStringFromLocalInput(popupForm.startAt)
+      : null;
+    const popupEndAt = popupForm.enabled
+      ? toUtcIsoStringFromLocalInput(popupForm.endAt)
+      : null;
+
     addNotificationMutation.mutate({
       TITLE: notificationForm.title.trim(),
       CONTENT: notificationForm.content,
       AUTHOR: "관리자",
       POSITION: "0",
       POPUP_YN: popupForm.enabled,
-      POPUP_START_AT: popupForm.enabled ? popupForm.startAt : null,
-      POPUP_END_AT: popupForm.enabled ? popupForm.endAt : null,
+      POPUP_START_AT: popupStartAt,
+      POPUP_END_AT: popupEndAt,
     });
   };
 
@@ -540,13 +553,20 @@ const Admin = () => {
       }
     }
 
+    const popupStartAt = editForm.popupEnabled
+      ? toUtcIsoStringFromLocalInput(editForm.popupStartAt)
+      : null;
+    const popupEndAt = editForm.popupEnabled
+      ? toUtcIsoStringFromLocalInput(editForm.popupEndAt)
+      : null;
+
     updateNotificationMutation.mutate({
       ...selectedNotification,
       TITLE: editForm.title.trim(),
       CONTENT: editForm.content,
       POPUP_YN: editForm.popupEnabled,
-      POPUP_START_AT: editForm.popupEnabled ? editForm.popupStartAt : null,
-      POPUP_END_AT: editForm.popupEnabled ? editForm.popupEndAt : null,
+      POPUP_START_AT: popupStartAt,
+      POPUP_END_AT: popupEndAt,
     });
     setIsEditMode(false);
   };
